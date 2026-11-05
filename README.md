@@ -78,7 +78,7 @@ split-screen и затемнение экрана.
 
 ## Сборка
 
-Текущая версия — **2.4.2** (versionCode 50).
+Текущая версия — **2.4.3** (versionCode 51).
 
 Нужны Android Studio (или Android SDK 36 + JDK 17 или новее) и доступ к интернету
 для зависимостей Gradle.
@@ -96,7 +96,7 @@ APK появится в `app/build/outputs/apk/debug/app-debug.apk`.
 .\gradlew.bat :app:testDebugUnitTest :app:lintDebug
 ```
 
-Для сборки APK с именем `carlifemirror.2.4.2.apk`:
+Для сборки APK с именем `carlifemirror.2.4.3.apk`:
 
 ```powershell
 .\gradlew.bat :app:copyNamedDebugApk
@@ -123,7 +123,7 @@ keystore.properties
 .\gradlew.bat :app:assembleRelease :app:copyNamedReleaseApk
 ```
 
-Готовый файл — `app/build/outputs/named/carlifemirror.2.4.2-release.apk`.
+Готовый файл — `app/build/outputs/named/carlifemirror.2.4.3-release.apk`.
 
 ## Установка и подключение
 

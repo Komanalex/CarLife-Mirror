@@ -144,12 +144,16 @@
     <string name="primary_stop_desc">Остановить трансляцию</string>
 
     <string name="permission_dialog_title">Доступ к системе</string>
-    <string name="permission_dialog_sub">Для стабильной работы приложению нужны два системных разрешения.</string>
+    <string name="permission_dialog_sub">Для работы приложению нужны системные разрешения.</string>
     <string name="permission_dialog_sub_one">Осталось выдать одно системное разрешение.</string>
     <string name="permission_rotation_title">Изменение системных настроек</string>
     <string name="permission_rotation_sub">Нужно, чтобы удерживать ландшафт во время трансляции.</string>
     <string name="permission_accessibility_title">Управление касаниями</string>
     <string name="permission_accessibility_sub">Нужно, чтобы касания с экрана магнитолы работали на телефоне.</string>
+    <string name="permission_audio_title">Запись звука</string>
+    <string name="permission_audio_sub">Нужна для передачи звука приложений и голоса навигатора на магнитолу.</string>
+    <string name="permission_notification_title">Доступ к уведомлениям</string>
+    <string name="permission_notification_sub">Нужен для подсказок навигатора на HUD магнитолы.</string>
     <string name="permission_granted">Разрешено</string>
     <string name="permission_not_granted">Не выдано</string>
     <string name="permission_allow">Разрешить</string>

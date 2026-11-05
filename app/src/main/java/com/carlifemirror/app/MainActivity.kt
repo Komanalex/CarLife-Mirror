@@ -421,6 +421,7 @@ open class MainActivity : Activity() {
                 Toast.LENGTH_LONG,
             ).show()
             updateNaviUi()
+            updatePermissionDialog()
         }
         if (pendingAutoSplit) {
             window.decorView.postDelayed({ attemptAutoSplit() }, AUTO_SPLIT_FOCUS_SETTLE_MS)
@@ -1355,7 +1356,11 @@ open class MainActivity : Activity() {
         ) {
             return
         }
-        if (!rotationPermissionMissing() && !accessibilityPermissionMissing()) return
+        if (!rotationPermissionMissing() && !accessibilityPermissionMissing() &&
+            hasAudioPermission() && NaviAccess.isEnabled(this)
+        ) {
+            return
+        }
         permissionPromptShown = true
         val view = layoutInflater.inflate(
             R.layout.dialog_permissions,
@@ -1390,13 +1395,23 @@ open class MainActivity : Activity() {
         val dialog = permissionDialog ?: return
         val rotationRow = dialog.findViewById<View>(R.id.permissionRotationRow) ?: return
         val accessibilityRow = dialog.findViewById<View>(R.id.permissionAccessibilityRow)
+        val audioRow = dialog.findViewById<View>(R.id.permissionAudioRow)
+        val notificationRow = dialog.findViewById<View>(R.id.permissionNotificationRow)
         val rotationStatus = dialog.findViewById<TextView>(R.id.permissionRotationStatus)
         val accessibilityStatus = dialog.findViewById<TextView>(R.id.permissionAccessibilityStatus)
+        val audioStatus = dialog.findViewById<TextView>(R.id.permissionAudioStatus)
+        val notificationStatus = dialog.findViewById<TextView>(R.id.permissionNotificationStatus)
         val rotationAction = dialog.findViewById<TextView>(R.id.permissionRotationAction)
         val accessibilityAction = dialog.findViewById<TextView>(R.id.permissionAccessibilityAction)
+        val audioAction = dialog.findViewById<TextView>(R.id.permissionAudioAction)
+        val notificationAction = dialog.findViewById<TextView>(R.id.permissionNotificationAction)
         val rotationNeeded = rotationPermissionMissing()
         val accessibilityNeeded = accessibilityPermissionMissing()
-        if (!rotationNeeded && !accessibilityNeeded) {
+        val audioNeeded = !hasAudioPermission()
+        val notificationNeeded = !NaviAccess.isEnabled(this)
+        val needed = listOf(rotationNeeded, accessibilityNeeded, audioNeeded, notificationNeeded)
+            .count { it }
+        if (needed == 0) {
             dialog.dismiss()
             permissionDialog = null
             permissionPromptDismissed = true
@@ -1405,33 +1420,39 @@ open class MainActivity : Activity() {
         }
         rotationRow.visibility = if (rotationNeeded) View.VISIBLE else View.GONE
         accessibilityRow?.visibility = if (accessibilityNeeded) View.VISIBLE else View.GONE
+        audioRow?.visibility = if (audioNeeded) View.VISIBLE else View.GONE
+        notificationRow?.visibility = if (notificationNeeded) View.VISIBLE else View.GONE
         dialog.findViewById<TextView>(R.id.permissionDialogSub)?.text = getString(
-            if (rotationNeeded && accessibilityNeeded) R.string.permission_dialog_sub
-            else R.string.permission_dialog_sub_one
+            if (needed == 1) R.string.permission_dialog_sub_one else R.string.permission_dialog_sub
         )
-        rotationStatus?.text = getString(
-            if (!rotationNeeded) R.string.permission_granted else R.string.permission_not_granted
-        )
-        accessibilityStatus?.text = getString(
-            if (!accessibilityNeeded) R.string.permission_granted else R.string.permission_not_granted
-        )
-        rotationStatus?.setTextColor(
-            getColor(if (!rotationNeeded) R.color.success else R.color.warning)
-        )
-        accessibilityStatus?.setTextColor(
-            getColor(if (!accessibilityNeeded) R.color.success else R.color.warning)
-        )
-        rotationAction?.text = getString(
-            if (!rotationNeeded) R.string.permission_check else R.string.permission_allow
-        )
-        accessibilityAction?.text = getString(
-            if (!accessibilityNeeded) R.string.permission_check else R.string.permission_allow
-        )
+        bindPermissionStatus(rotationStatus, rotationAction, rotationNeeded)
+        bindPermissionStatus(accessibilityStatus, accessibilityAction, accessibilityNeeded)
+        bindPermissionStatus(audioStatus, audioAction, audioNeeded)
+        bindPermissionStatus(notificationStatus, notificationAction, notificationNeeded)
         rotationRow.setOnClickListener { openWriteSettings() }
         accessibilityRow?.setOnClickListener { openAccessibilitySettings() }
+        audioRow?.setOnClickListener {
+            pendingAudioSwitch = false
+            if (!hasAudioPermission()) requestAudioPermission()
+            else updatePermissionDialog()
+        }
+        notificationRow?.setOnClickListener {
+            checkingNaviAccess = true
+            NaviAccess.openSettings(this)
+        }
         dialog.findViewById<TextView>(R.id.permissionLater)?.setOnClickListener {
             dismissPermissionPrompt(markDismissed = true)
         }
+    }
+
+    private fun bindPermissionStatus(status: TextView?, action: TextView?, needed: Boolean) {
+        status?.text = getString(
+            if (needed) R.string.permission_not_granted else R.string.permission_granted
+        )
+        status?.setTextColor(getColor(if (needed) R.color.warning else R.color.success))
+        action?.text = getString(
+            if (needed) R.string.permission_allow else R.string.permission_check
+        )
     }
 
     private fun dismissPermissionPrompt(markDismissed: Boolean) {
@@ -2592,6 +2613,7 @@ open class MainActivity : Activity() {
                 pendingAudioSwitch = false
                 refreshAudioService()
             }
+            updatePermissionDialog()
             if (awaitingConsent) beginProjectionFlow()
             return
         }
