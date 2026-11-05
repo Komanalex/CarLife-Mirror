@@ -42,17 +42,6 @@ object Msg {
     const val VIDEO_ENCODER_FRAME_RATE_CHANGE = 0x0001800C
     const val VIDEO_ENCODER_FRAME_RATE_CHANGE_DONE = 0x0001000D
     const val CAR_VELOCITY = 0x0001800F
-    const val CAR_GPS = 0x00018010
-    const val CAR_GYROSCOPE = 0x00018011
-    const val CAR_ACCELERATION = 0x00018012
-    const val CAR_OIL = 0x00018013
-    const val CAR_DATA_SUBSCRIBE = 0x00010031
-    const val CAR_DATA_SUBSCRIBE_DONE = 0x00010032
-    const val CAR_DATA_SUBSCRIBE_RSP = 0x00018032
-    const val CAR_DATA_START_REQ = 0x00010033
-    const val CAR_DATA_STOP_REQ = 0x00010034
-    const val GEAR_INFO = 0x00010029
-    const val HU_GEAR_INFO = 0x00018029
     const val SCREEN_ON = 0x00010018
     const val FOREGROUND = 0x0001001B
     const val LAUNCH_MODE_NORMAL = 0x0001801D
@@ -144,10 +133,6 @@ object Msg {
         VIDEO_ENCODER_FRAME_RATE_CHANGE_DONE to "VIDEO_ENCODER_FRAME_RATE_CHANGE_DONE",
         0x0001800E to "PAUSE_MEDIA",
         CAR_VELOCITY to "CAR_VELOCITY",
-        0x00018010 to "CAR_GPS",
-        0x00018011 to "CAR_GYROSCOPE",
-        0x00018012 to "CAR_ACCELERATION",
-        0x00018013 to "CAR_OIL",
         0x00010014 to "TELE_STATE_CHANGE_INCOMING",
         0x00010015 to "TELE_STATE_CHANGE_OUTGOING",
         0x00010016 to "TELE_STATE_CHANGE_IDLE",
@@ -169,14 +154,7 @@ object Msg {
         MODULE_STATUS to "MODULE_STATUS",
         STATISTIC_INFO to "STATISTIC_INFO",
         MODULE_CONTROL to "MODULE_CONTROL",
-        GEAR_INFO to "GEAR_INFO",
-        HU_GEAR_INFO to "HU_GEAR_INFO",
         NAVI_NEXT_TURN_INFO to "NAVI_NEXT_TURN_INFO",
-        CAR_DATA_SUBSCRIBE to "CAR_DATA_SUBSCRIBE",
-        CAR_DATA_SUBSCRIBE_DONE to "CAR_DATA_SUBSCRIBE_DONE(C++)",
-        CAR_DATA_SUBSCRIBE_RSP to "CAR_DATA_SUBSCRIBE_RSP(Java)",
-        CAR_DATA_START_REQ to "CAR_DATA_START",
-        CAR_DATA_STOP_REQ to "CAR_DATA_STOP",
         MEDIA_INFO to "MEDIA_INFO",
         MEDIA_PROGRESS_BAR to "MEDIA_PROGRESS_BAR",
         CONNECT_EXCEPTION to "CONNECT_EXCEPTION",
@@ -626,10 +604,6 @@ object Msgs {
      * action: 1 — показать, 2 — обновить, 3 — завершить.
      * Расстояния в метрах; turnIcon — PNG, как в Baidu CarLife.
      */
-    /** CarlifeVehicleInfo для CAR_DATA_START/STOP: moduleID, flag, frequency. */
-    fun vehicleInfo(moduleID: Int, flag: Int, frequency: Int): ByteArray =
-        PbWriter().int32(1, moduleID).int32(2, flag).int32(3, frequency).toByteArray()
-
     fun naviNextTurn(
         action: Int,
         nextTurn: Int,

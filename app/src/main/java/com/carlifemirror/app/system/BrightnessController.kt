@@ -51,10 +51,6 @@ class BrightnessController(
             warnNoPermission()
             return
         }
-        if (!MirrorAccessibilityService.isEnabled(appContext)) {
-            Logx.w("Яркость: служба управления выключена, касание не отследить")
-            return
-        }
         sessionActive = true
         ensureSnapshot()
         handler.removeCallbacks(redim)
@@ -70,18 +66,15 @@ class BrightnessController(
         }
     }
 
-    /** Любое физическое касание экрана телефона. */
+    /** Касание с экрана магнитолы. */
     @Synchronized
-    fun onPhysicalTouch() {
+    fun onCarTouch() {
         if (!sessionActive) return
-        // Сразу возвращаем исходную яркость и даём пользователю 5 секунд.
         if (dimmed) {
+            // Возвращаем яркость, но само касание не перехватываем: оно должно
+            // дойти до приложения под трансляцией.
             restoreOriginal(clearSnapshot = false)
-            Logx.i("Яркость: касание телефона, восстановлена на 5 секунд")
-        } else {
-            // Страховка от зависшего touch exploration: касаний больше не
-            // ждём, пока экран не будет затемнён снова.
-            MirrorAccessibilityService.instance?.setTouchCaptureEnabled(false)
+            Logx.i("Яркость: касание с магнитолы, восстановлена на 5 секунд")
         }
         handler.removeCallbacks(redim)
         handler.postDelayed(redim, DIM_REDELAY_MS)
@@ -93,10 +86,11 @@ class BrightnessController(
         if (settings.dimScreen && MirrorState.value.phase == Phase.STREAMING) {
             startSession()
         }
-        // Если яркость уже затемнена, после переподключения службы заново
-        // включаем отслеживание касаний: флаг живёт в AccessibilityServiceInfo.
+        // Если яркость уже затемнена, после переподключения службы ничего
+        // дополнительно включать не нужно: яркость не зависит от перехвата
+        // касаний.
         if (sessionActive && dimmed) {
-            MirrorAccessibilityService.instance?.setTouchCaptureEnabled(true)
+            Logx.i("Яркость: служба управления переподключена, затемнение активно")
         }
     }
 
@@ -144,11 +138,8 @@ class BrightnessController(
         val target = brightnessValue(percent)
         val valueOk = putInt(AndroidSettings.System.SCREEN_BRIGHTNESS, target)
         dimmed = modeOk && valueOk
-        // В обычном режиме TYPE_TOUCH_INTERACTION_START не приходит. Пока
-        // экран затемнён, на время включаем touch exploration: первое
-        // физическое касание вернёт яркость, после чего режим сразу
-        // выключается и обычные касания снова работают как обычно.
-        MirrorAccessibilityService.instance?.setTouchCaptureEnabled(dimmed)
+        // Никакого touch exploration: оно перехватывает первое касание и
+        // ломает одиночные нажатия и перетаскивание разделителя split.
         Logx.i("Яркость: установлена на $percent% ($target/255, mode=$modeOk value=$valueOk)")
     }
 
@@ -171,7 +162,6 @@ class BrightnessController(
         putInt(AndroidSettings.System.SCREEN_BRIGHTNESS, value)
         putInt(AndroidSettings.System.SCREEN_BRIGHTNESS_MODE, mode)
         dimmed = false
-        MirrorAccessibilityService.instance?.setTouchCaptureEnabled(false)
         Logx.i("Яркость: восстановлено исходное значение mode=$mode value=$value")
         if (clearSnapshot) {
             settings.brightnessDimSaved = false

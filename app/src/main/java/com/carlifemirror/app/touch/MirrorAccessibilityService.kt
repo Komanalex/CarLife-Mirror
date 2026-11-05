@@ -1,7 +1,6 @@
 package com.carlifemirror.app.touch
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityService.GestureResultCallback
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.content.ComponentName
@@ -22,7 +21,6 @@ import android.view.accessibility.AccessibilityWindowInfo
 import com.carlifemirror.app.MirrorState
 import com.carlifemirror.app.system.BrightnessController
 import com.carlifemirror.app.util.Logx
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Служба доступности используется для отправки жестов (касаний) и определения
@@ -39,15 +37,13 @@ class MirrorAccessibilityService : AccessibilityService() {
     private var multiActive = false
     private var lastMultiMoveAt = 0L
     private var lastBoundsDiagnosticPackage = ""
-    private val injectedGestures = AtomicInteger(0)
-    private var injectedUntil = 0L
-    private var touchDiagnosticLogged = false
     private var splitRatioTarget = -1
     private var splitRatioDrags = 0
     private var splitRatioLastDragAt = 0L
     private var splitRatioStablePair: SplitPanePair? = null
     private var splitRatioStableSince = 0L
     private var splitRatioDispatched = false
+    private var splitRatioDispatchedAt = 0L
     private var splitRatioGaveUpLogged = false
 
     override fun onServiceConnected() {
@@ -62,10 +58,6 @@ class MirrorAccessibilityService : AccessibilityService() {
                 if (wanted != current.flags) {
                     current.flags = wanted
                 }
-                val wantedEvents = current.eventTypes or AccessibilityEvent.TYPE_TOUCH_INTERACTION_START
-                if (wantedEvents != current.eventTypes) {
-                    current.eventTypes = wantedEvents
-                }
                 setServiceInfo(current)
             }
         } catch (_: Exception) {
@@ -79,14 +71,6 @@ class MirrorAccessibilityService : AccessibilityService() {
                 AccessibilityServiceInfo.CAPABILITY_CAN_RETRIEVE_WINDOW_CONTENT) == 0
         ) {
             Logx.w("Служба управления: нет доступа к границам окон; выключите и включите службу заново")
-        }
-        if (info != null && (info.capabilities and
-                AccessibilityServiceInfo.CAPABILITY_CAN_REQUEST_TOUCH_EXPLORATION) == 0
-        ) {
-            Logx.w(
-                "Служба управления: нет разрешения на отслеживание касаний; " +
-                    "выключите и включите службу заново"
-            )
         }
         BrightnessController.instance?.onAccessibilityReady()
     }
@@ -104,18 +88,6 @@ class MirrorAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val type = event?.eventType ?: return
-        if (type == AccessibilityEvent.TYPE_TOUCH_INTERACTION_START) {
-            val injected = injectedGestures.get() > 0 ||
-                SystemClock.uptimeMillis() < injectedUntil
-            if (!touchDiagnosticLogged) {
-                touchDiagnosticLogged = true
-                Logx.i("Служба управления: первое касание экрана (injected=$injected)")
-            }
-            if (!injected) {
-                BrightnessController.instance?.onPhysicalTouch()
-            }
-            return
-        }
         if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         onWindowEvent(event, pkg, 2)
@@ -198,30 +170,6 @@ class MirrorAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
-
-    /**
-     * Включает приём TYPE_TOUCH_INTERACTION_START. Эти события доступны только
-     * в touch exploration mode, поэтому включаем его лишь на время затемнения:
-     * первое касание вернёт яркость, после чего режим сразу выключается.
-     */
-    @Synchronized
-    fun setTouchCaptureEnabled(enabled: Boolean) {
-        val info = serviceInfo ?: return
-        val active = (info.flags and
-            AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE) != 0
-        if (active == enabled) return
-        info.flags = if (enabled) {
-            info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-        } else {
-            info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE.inv()
-        }
-        try {
-            setServiceInfo(info)
-            Logx.i("Служба управления: отслеживание касаний ${if (enabled) "включено" else "выключено"}")
-        } catch (e: Exception) {
-            Logx.w("Служба управления: не удалось переключить отслеживание касаний: ${e.message}")
-        }
-    }
 
     fun tap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x.coerceIn(0f, 100000f), y.coerceIn(0f, 100000f)) }
@@ -451,6 +399,7 @@ class MirrorAccessibilityService : AccessibilityService() {
         splitRatioStablePair = null
         splitRatioStableSince = 0L
         splitRatioDispatched = false
+        splitRatioDispatchedAt = 0L
         splitRatioGaveUpLogged = false
     }
 
@@ -474,7 +423,29 @@ class MirrorAccessibilityService : AccessibilityService() {
             splitRatioDispatched = false
             splitRatioGaveUpLogged = false
         }
-        if (splitRatioDispatched) return true
+        if (splitRatioDispatched) {
+            val verified = findSplitPair()
+            if (verified != null &&
+                kotlin.math.abs(verified.firstPercent - target) <= RATIO_TOLERANCE_PERCENT
+            ) {
+                if (splitRatioDrags > 0) {
+                    val label = (verified.firstPercent + 0.5f).toInt()
+                    Logx.i("Пропорция split: установлена $label% / ${100 - label}%")
+                }
+                return true
+            }
+            if (SystemClock.uptimeMillis() - splitRatioDispatchedAt < RATIO_VERIFY_MS) {
+                return false
+            }
+            if (splitRatioDrags >= 3) {
+                if (!splitRatioGaveUpLogged) {
+                    splitRatioGaveUpLogged = true
+                    Logx.w("Пропорция split: не удалось выставить $target%, оставляю как есть")
+                }
+                return true
+            }
+            splitRatioDispatched = false
+        }
 
         val pair = findSplitPair() ?: return false
         val previous = splitRatioStablePair
@@ -530,7 +501,8 @@ class MirrorAccessibilityService : AccessibilityService() {
             return false
         }
         splitRatioDispatched = true
-        splitRatioDrags = 1
+        splitRatioDispatchedAt = now
+        splitRatioDrags++
         splitRatioLastDragAt = now
         Logx.i(
             "Пропорция split: панели ${pair.first.width()}x${pair.first.height()} + " +
@@ -748,37 +720,17 @@ class MirrorAccessibilityService : AccessibilityService() {
         return b.build()
     }
 
-    private fun dispatch(g: GestureDescription): Boolean {
-        injectedUntil = SystemClock.uptimeMillis() + INJECTED_GUARD_MS
-        injectedGestures.incrementAndGet()
-        val callback = object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                injectedGestures.decrementAndGet()
-                injectedUntil = SystemClock.uptimeMillis() + INJECTED_GUARD_MS
-            }
-
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                injectedGestures.decrementAndGet()
-                injectedUntil = SystemClock.uptimeMillis() + INJECTED_GUARD_MS
-            }
-        }
-        return try {
-            val accepted = dispatchGesture(g, callback, main)
-            if (!accepted) {
-                injectedGestures.decrementAndGet()
-            }
-            accepted
-        } catch (e: Exception) {
-            injectedGestures.decrementAndGet()
-            Logx.w("Жест не отправлен: ${e.message}")
-            false
-        }
+    private fun dispatch(g: GestureDescription): Boolean = try {
+        dispatchGesture(g, null, main)
+    } catch (e: Exception) {
+        Logx.w("Жест не отправлен: ${e.message}")
+        false
     }
 
     companion object {
-        private const val INJECTED_GUARD_MS = 150L
         private const val RATIO_TOLERANCE_PERCENT = 2.0f
         private const val RATIO_STABLE_MS = 700L
+        private const val RATIO_VERIFY_MS = 1_500L
         private const val RATIO_DRAG_DURATION_MS = 700L
 
         @Volatile var instance: MirrorAccessibilityService? = null

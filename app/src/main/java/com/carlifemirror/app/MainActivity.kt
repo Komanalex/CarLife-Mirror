@@ -50,8 +50,6 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import com.carlifemirror.app.carlife.Handshake
-import com.carlifemirror.app.navi.NaviAccess
-import com.carlifemirror.app.navi.NaviField6
 import com.carlifemirror.app.system.RotationController
 import com.carlifemirror.app.system.ThemeController
 import com.carlifemirror.app.touch.MirrorAccessibilityService
@@ -86,8 +84,6 @@ open class MainActivity : Activity() {
     private lateinit var splitHint: TextView
     private lateinit var versionText: TextView
     private lateinit var aboutVersion: TextView
-    private var secretTapCount = 0
-    private var secretTapAt = 0L
     private lateinit var connectionUsb: TextView
     private lateinit var connectionWifi: TextView
     private lateinit var connectionHint: TextView
@@ -112,14 +108,6 @@ open class MainActivity : Activity() {
     private lateinit var brightnessDimSeek: SeekBar
     private lateinit var brightnessDimValue: TextView
     private lateinit var brightnessDimWarning: TextView
-    private lateinit var naviHudSwitch: Switch
-    private lateinit var naviInfoSwitch: Switch
-    private lateinit var naviFieldIcon: TextView
-    private lateinit var naviFieldTime: TextView
-    private lateinit var naviFieldBoth: TextView
-    private lateinit var naviFieldNone: TextView
-    private lateinit var naviAccessStatus: TextView
-    private lateinit var naviAccessButton: Button
     private lateinit var usbAudioSwitch: Switch
     private lateinit var usbAudioNote: TextView
     private lateinit var systemLandscapeSwitch: Switch
@@ -152,7 +140,6 @@ open class MainActivity : Activity() {
     private var bindingSplitUi = false
     private var bindingRotationUi = false
     private var bindingBrightnessUi = false
-    private var bindingNaviUi = false
     private var pendingAudioSwitch = false
     private var audioPermissionRequestPending = false
     private var pendingWirelessMode = false
@@ -175,8 +162,6 @@ open class MainActivity : Activity() {
     private var permissionPromptShown = false
     private var permissionPromptDismissed = false
     private var checkingBrightnessPermission = false
-    private var checkingBrightnessAccessibility = false
-    private var checkingNaviAccess = false
     private var autoStartAttempted = false
     private var backCallback: OnBackInvokedCallback? = null
 
@@ -198,7 +183,7 @@ open class MainActivity : Activity() {
         }
         val access = MirrorAccessibilityService.instance
         val applied = access?.applySplitRatio(settings.splitRatioFirst) == true
-        if (!applied && splitRatioApplyAttempts < 20) {
+        if (!applied && splitRatioApplyAttempts < 40) {
             splitRatioApplyAttempts++
             window.decorView.postDelayed(applySplitRatio, 300L)
         } else {
@@ -304,25 +289,11 @@ open class MainActivity : Activity() {
         }
         versionText.text = getString(R.string.version_short, versionName)
         aboutVersion.text = getString(R.string.version_full, versionName)
-        versionText.setOnClickListener { onVersionTap() }
         window.decorView.postDelayed({ maybeShowPermissionPrompt() }, 350)
         window.decorView.postDelayed({ maybeAutoStart() }, 900)
         if (restoreSettings || intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false)) {
             intent.removeExtra(EXTRA_OPEN_SETTINGS)
             window.decorView.postDelayed({ showSettings() }, 80)
-        }
-    }
-
-    /** 10 быстрых нажатий на версию в шапке настроек открывают диагностику. */
-    private fun onVersionTap() {
-        val now = SystemClock.elapsedRealtime()
-        if (now - secretTapAt > 1_500L) secretTapCount = 0
-        secretTapAt = now
-        secretTapCount++
-        if (secretTapCount == 10) {
-            secretTapCount = 0
-            secretTapAt = 0L
-            startActivity(Intent(this, SecretMenuActivity::class.java))
         }
     }
 
@@ -388,40 +359,9 @@ open class MainActivity : Activity() {
                     R.string.brightness_permission_not_granted,
                     Toast.LENGTH_LONG,
                 ).show()
-            } else if (!MirrorAccessibilityService.isEnabled(this)) {
-                checkingBrightnessAccessibility = true
-                Toast.makeText(
-                    this,
-                    R.string.brightness_accessibility_short,
-                    Toast.LENGTH_LONG,
-                ).show()
-                openAccessibilitySettings()
             } else {
                 refreshBrightnessService()
             }
-        }
-        if (checkingBrightnessAccessibility) {
-            checkingBrightnessAccessibility = false
-            if (!MirrorAccessibilityService.isEnabled(this)) {
-                Toast.makeText(
-                    this,
-                    R.string.brightness_accessibility_not_enabled,
-                    Toast.LENGTH_LONG,
-                ).show()
-            } else {
-                refreshBrightnessService()
-            }
-        }
-        if (checkingNaviAccess) {
-            checkingNaviAccess = false
-            val granted = NaviAccess.isEnabled(this)
-            Toast.makeText(
-                this,
-                if (granted) R.string.navi_access_granted else R.string.navi_access_not_granted,
-                Toast.LENGTH_LONG,
-            ).show()
-            updateNaviUi()
-            updatePermissionDialog()
         }
         if (pendingAutoSplit) {
             window.decorView.postDelayed({ attemptAutoSplit() }, AUTO_SPLIT_FOCUS_SETTLE_MS)
@@ -651,14 +591,6 @@ open class MainActivity : Activity() {
         brightnessDimSeek = findViewById(R.id.brightnessDimSeek)
         brightnessDimValue = findViewById(R.id.brightnessDimValue)
         brightnessDimWarning = findViewById(R.id.brightnessDimWarning)
-        naviHudSwitch = findViewById(R.id.naviHudSwitch)
-        naviInfoSwitch = findViewById(R.id.naviInfoSwitch)
-        naviFieldIcon = findViewById(R.id.naviFieldIcon)
-        naviFieldTime = findViewById(R.id.naviFieldTime)
-        naviFieldBoth = findViewById(R.id.naviFieldBoth)
-        naviFieldNone = findViewById(R.id.naviFieldNone)
-        naviAccessStatus = findViewById(R.id.naviAccessStatus)
-        naviAccessButton = findViewById(R.id.naviAccessButton)
         usbAudioSwitch = findViewById(R.id.usbAudioSwitch)
         usbAudioNote = findViewById(R.id.usbAudioNote)
         systemLandscapeSwitch = findViewById(R.id.systemLandscapeSwitch)
@@ -817,18 +749,12 @@ open class MainActivity : Activity() {
                 return@setOnCheckedChangeListener
             }
             // Включили затемнение: без права менять системные настройки
-            // яркость не изменить, без службы управления не вернуть её
-            // касанием. Просим недостающее, оставляя переключатель включённым.
+            // яркость не изменить. Служба доступности для затемнения больше
+            // не нужна: она отвечает только за касания.
             if (!RotationController.canWrite(this)) {
                 checkingBrightnessPermission = true
                 Toast.makeText(this, R.string.brightness_permission_short, Toast.LENGTH_LONG).show()
                 openWriteSettings()
-                return@setOnCheckedChangeListener
-            }
-            if (!MirrorAccessibilityService.isEnabled(this)) {
-                checkingBrightnessAccessibility = true
-                Toast.makeText(this, R.string.brightness_accessibility_short, Toast.LENGTH_LONG).show()
-                openAccessibilitySettings()
                 return@setOnCheckedChangeListener
             }
             refreshBrightnessService()
@@ -849,35 +775,6 @@ open class MainActivity : Activity() {
                 refreshBrightnessService()
             }
         })
-
-        naviHudSwitch.setOnCheckedChangeListener { _, checked ->
-            if (bindingNaviUi) return@setOnCheckedChangeListener
-            settings.naviHud = checked
-            updateNaviUi()
-            if (checked && !NaviAccess.isEnabled(this)) {
-                checkingNaviAccess = true
-                Toast.makeText(this, R.string.navi_access_short, Toast.LENGTH_LONG).show()
-                NaviAccess.openSettings(this)
-            }
-        }
-        naviInfoSwitch.setOnCheckedChangeListener { _, checked ->
-            if (bindingNaviUi) return@setOnCheckedChangeListener
-            settings.naviInfoHud = checked
-            updateNaviUi()
-            if (checked && !NaviAccess.isEnabled(this)) {
-                checkingNaviAccess = true
-                Toast.makeText(this, R.string.navi_access_short, Toast.LENGTH_LONG).show()
-                NaviAccess.openSettings(this)
-            }
-        }
-        naviFieldIcon.setOnClickListener { selectNaviField6(NaviField6.ICON) }
-        naviFieldTime.setOnClickListener { selectNaviField6(NaviField6.TIME) }
-        naviFieldBoth.setOnClickListener { selectNaviField6(NaviField6.BOTH) }
-        naviFieldNone.setOnClickListener { selectNaviField6(NaviField6.NONE) }
-        naviAccessButton.setOnClickListener {
-            checkingNaviAccess = true
-            NaviAccess.openSettings(this)
-        }
 
         usbAudioSwitch.setOnCheckedChangeListener { _, checked ->
             if (bindingAudioUi) return@setOnCheckedChangeListener
@@ -1089,7 +986,6 @@ open class MainActivity : Activity() {
         updateSplitUi()
         updateRotationUi()
         updateBrightnessUi()
-        updateNaviUi()
         updateVideoSettingsUi()
     }
 
@@ -1357,7 +1253,7 @@ open class MainActivity : Activity() {
             return
         }
         if (!rotationPermissionMissing() && !accessibilityPermissionMissing() &&
-            hasAudioPermission() && NaviAccess.isEnabled(this)
+            hasAudioPermission()
         ) {
             return
         }
@@ -1396,21 +1292,16 @@ open class MainActivity : Activity() {
         val rotationRow = dialog.findViewById<View>(R.id.permissionRotationRow) ?: return
         val accessibilityRow = dialog.findViewById<View>(R.id.permissionAccessibilityRow)
         val audioRow = dialog.findViewById<View>(R.id.permissionAudioRow)
-        val notificationRow = dialog.findViewById<View>(R.id.permissionNotificationRow)
         val rotationStatus = dialog.findViewById<TextView>(R.id.permissionRotationStatus)
         val accessibilityStatus = dialog.findViewById<TextView>(R.id.permissionAccessibilityStatus)
         val audioStatus = dialog.findViewById<TextView>(R.id.permissionAudioStatus)
-        val notificationStatus = dialog.findViewById<TextView>(R.id.permissionNotificationStatus)
         val rotationAction = dialog.findViewById<TextView>(R.id.permissionRotationAction)
         val accessibilityAction = dialog.findViewById<TextView>(R.id.permissionAccessibilityAction)
         val audioAction = dialog.findViewById<TextView>(R.id.permissionAudioAction)
-        val notificationAction = dialog.findViewById<TextView>(R.id.permissionNotificationAction)
         val rotationNeeded = rotationPermissionMissing()
         val accessibilityNeeded = accessibilityPermissionMissing()
         val audioNeeded = !hasAudioPermission()
-        val notificationNeeded = !NaviAccess.isEnabled(this)
-        val needed = listOf(rotationNeeded, accessibilityNeeded, audioNeeded, notificationNeeded)
-            .count { it }
+        val needed = listOf(rotationNeeded, accessibilityNeeded, audioNeeded).count { it }
         if (needed == 0) {
             dialog.dismiss()
             permissionDialog = null
@@ -1421,24 +1312,18 @@ open class MainActivity : Activity() {
         rotationRow.visibility = if (rotationNeeded) View.VISIBLE else View.GONE
         accessibilityRow?.visibility = if (accessibilityNeeded) View.VISIBLE else View.GONE
         audioRow?.visibility = if (audioNeeded) View.VISIBLE else View.GONE
-        notificationRow?.visibility = if (notificationNeeded) View.VISIBLE else View.GONE
         dialog.findViewById<TextView>(R.id.permissionDialogSub)?.text = getString(
             if (needed == 1) R.string.permission_dialog_sub_one else R.string.permission_dialog_sub
         )
         bindPermissionStatus(rotationStatus, rotationAction, rotationNeeded)
         bindPermissionStatus(accessibilityStatus, accessibilityAction, accessibilityNeeded)
         bindPermissionStatus(audioStatus, audioAction, audioNeeded)
-        bindPermissionStatus(notificationStatus, notificationAction, notificationNeeded)
         rotationRow.setOnClickListener { openWriteSettings() }
         accessibilityRow?.setOnClickListener { openAccessibilitySettings() }
         audioRow?.setOnClickListener {
             pendingAudioSwitch = false
             if (!hasAudioPermission()) requestAudioPermission()
             else updatePermissionDialog()
-        }
-        notificationRow?.setOnClickListener {
-            checkingNaviAccess = true
-            NaviAccess.openSettings(this)
         }
         dialog.findViewById<TextView>(R.id.permissionLater)?.setOnClickListener {
             dismissPermissionPrompt(markDismissed = true)
@@ -1893,43 +1778,6 @@ open class MainActivity : Activity() {
         val text = getString(R.string.brightness_dim_value, percent)
         brightnessDimValue.text = text
         brightnessDimSeek.contentDescription = getString(R.string.brightness_dim_title) + ": " + text
-    }
-
-    /** Переключатель turn-by-turn и статус доступа к уведомлениям. */
-    private fun updateNaviUi() {
-        bindingNaviUi = true
-        try {
-            val granted = NaviAccess.isEnabled(this)
-            naviHudSwitch.isChecked = settings.naviHud
-            naviInfoSwitch.isChecked = settings.naviInfoHud
-            val field6 = settings.naviField6
-            naviFieldIcon.isSelected = field6 == NaviField6.ICON
-            naviFieldTime.isSelected = field6 == NaviField6.TIME
-            naviFieldBoth.isSelected = field6 == NaviField6.BOTH
-            naviFieldNone.isSelected = field6 == NaviField6.NONE
-            val prefix = getString(R.string.navi_field6_title) + ", "
-            naviFieldIcon.contentDescription = prefix + getString(R.string.navi_field6_icon)
-            naviFieldTime.contentDescription = prefix + getString(R.string.navi_field6_time)
-            naviFieldBoth.contentDescription = prefix + getString(R.string.navi_field6_both)
-            naviFieldNone.contentDescription = prefix + getString(R.string.navi_field6_none)
-            naviAccessStatus.text = getString(
-                if (granted) R.string.navi_access_on else R.string.navi_access_off
-            )
-            naviAccessStatus.setTextColor(
-                getColor(if (granted) R.color.success else R.color.warning)
-            )
-            naviAccessButton.text = getString(
-                if (granted) R.string.permission_check else R.string.navi_access_button
-            )
-        } finally {
-            bindingNaviUi = false
-        }
-    }
-
-    private fun selectNaviField6(value: NaviField6) {
-        if (bindingNaviUi) return
-        settings.naviField6 = value
-        updateNaviUi()
     }
 
     /**

@@ -8,8 +8,7 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import com.carlifemirror.app.MirrorState
 import com.carlifemirror.app.audio.MirrorAudioCapture
-import com.carlifemirror.app.car.CarDataParser
-import com.carlifemirror.app.car.CarDataStore
+import com.carlifemirror.app.system.BrightnessController
 import com.carlifemirror.app.Phase
 import com.carlifemirror.app.Settings
 import com.carlifemirror.app.link.CarTransport
@@ -96,7 +95,6 @@ class CarLifeMirrorSession(
     private var vrMicBytes = 0L
     @Volatile private var huChannel = ""
     @Volatile private var huHeartbeats = 0L
-    @Volatile private var carVelocity = 0L
     @Volatile private var lastHeartbeatAt = 0L
     @Volatile private var lastVideoQueuedAt = 0L
     @Volatile private var lastTransportWriteAt = 0L
@@ -133,12 +131,6 @@ class CarLifeMirrorSession(
     private var naviUpdates = 0L
     private var naviKeepalives = 0L
     private var naviPeriodicShows = 0L
-    private var carDataRequestSeen = -1L
-    private var carDataStopSeen = -1L
-    private var carDataStarted = false
-    private var carDataRequestPending = false
-    private val carDataStartedModules = linkedSetOf<Int>()
-    private val carDataLogged = HashSet<String>()
 
     fun start() {
         MirrorState.update {
@@ -168,10 +160,6 @@ class CarLifeMirrorSession(
             close("Не удалось открыть $kind: ${e.message ?: e.javaClass.simpleName}")
             return
         }
-        CarDataStore.beginSession(transport.label)
-        carDataRequestSeen = CarDataStore.requestSeq
-        carDataStopSeen = CarDataStore.stopSeq
-        carDataRequestPending = settings.carDataProbe
         sched.schedule({
             if (!matchSent && !closed.get()) close("Магнитола не прислала версию протокола CarLife")
         }, 15, TimeUnit.SECONDS)
@@ -184,7 +172,6 @@ class CarLifeMirrorSession(
         sched.scheduleWithFixedDelay({ videoWatchdog() }, 1, 1, TimeUnit.SECONDS)
         sched.scheduleWithFixedDelay({ publishStats() }, 1, 1, TimeUnit.SECONDS)
         sched.scheduleWithFixedDelay({ naviTick() }, 1, 500, TimeUnit.MILLISECONDS)
-        sched.scheduleWithFixedDelay({ carDataTick() }, 1, 1, TimeUnit.SECONDS)
         sched.scheduleWithFixedDelay(
             { audioResync() },
             AUDIO_RESYNC_INTERVAL_MS,
@@ -204,7 +191,6 @@ class CarLifeMirrorSession(
         try { e?.stop() } catch (ex: Exception) { Logx.e("Остановка видео", ex) }
         encoder = null
         stopAudio(sendStop = true)
-        CarDataStore.endSession(effectiveReason)
         Logx.i(buildSummary(effectiveReason, e))
         Logx.i("Сеанс: закрытие транспорта")
         try { transport.close() } catch (_: Exception) {}
@@ -271,7 +257,6 @@ class CarLifeMirrorSession(
                     huName = name
                     MirrorState.update { it.copy(hu = name) }
                     Logx.i("ГУ: $name")
-                    syncCarDataSession()
                 }
             }
             Msg.STATISTIC_INFO -> {
@@ -280,7 +265,6 @@ class CarLifeMirrorSession(
                 if (channel.isNotBlank()) {
                     huChannel = channel
                     Logx.i("ГУ channel=$channel")
-                    syncCarDataSession()
                 }
                 Logx.i("STATISTIC_INFO: подтверждаю сессию, запрашиваю FEATURE_CONFIG")
                 for (c in Handshake.onStatisticInfo(sendFeatureConfigRequest = true)) sendCmd(c.type, c.body)
@@ -291,20 +275,7 @@ class CarLifeMirrorSession(
                     Logx.i("HU VIDEO_HEARTBEAT #$huHeartbeats")
                 }
             }
-            Msg.CAR_VELOCITY -> {
-                carVelocity++
-                onCarDataMessage("CAR_VELOCITY", m.body, CarDataParser.parseSpeed(m.body))
-                if (carVelocity == 1L || carVelocity % 60L == 0L) {
-                    Logx.i("HU CAR_VELOCITY #$carVelocity")
-                }
-            }
-            Msg.CAR_GPS -> onCarDataMessage("CAR_GPS", m.body, CarDataParser.parseGps(m.body))
-            Msg.CAR_GYROSCOPE -> onCarDataMessage("CAR_GYROSCOPE", m.body, CarDataParser.parseGyroscope(m.body))
-            Msg.CAR_ACCELERATION -> onCarDataMessage("CAR_ACCELERATION", m.body, CarDataParser.parseAcceleration(m.body))
-            Msg.CAR_OIL -> onCarDataMessage("CAR_OIL", m.body, CarDataParser.parseOil(m.body))
-            Msg.GEAR_INFO, Msg.HU_GEAR_INFO ->
-                onCarDataMessage(Msg.name(m.type), m.body, CarDataParser.parseGear(m.body))
-            Msg.CAR_DATA_SUBSCRIBE_DONE, Msg.CAR_DATA_SUBSCRIBE_RSP -> onCarDataSubscribeRsp(m.body)
+            Msg.CAR_VELOCITY -> Unit
             Msg.BT_START_IDENTIFY_REQ -> Logx.i("BT_START_IDENTIFY_REQ: игнорирую (как Headswap)")
             Msg.BT_HFP_CONNECTION -> {
                 val state = PbReader.parse(m.body)?.let { PbReader.int(it, 1) }
@@ -404,7 +375,6 @@ class CarLifeMirrorSession(
             Msg.MODULE_CONTROL -> onModuleControl(m)
             Msg.MD_EXIT -> close("Магнитола завершила сеанс")
             else -> {
-                CarDataStore.onUnknown(m.type, m.body)
                 Logx.w(
                     "Неизвестная CMD 0x%08X (%d Б): %s".format(
                         m.type,
@@ -424,7 +394,6 @@ class CarLifeMirrorSession(
         huMajor = major
         huMinor = minor
         protocol = "$major.$minor"
-        syncCarDataSession()
         matchSent = true
         val info = deviceInfo()
         mdInfoKey = HuAuth.mdInfoKey(info)
@@ -462,7 +431,6 @@ class CarLifeMirrorSession(
             return
         }
         authMode = mode
-        syncCarDataSession()
         sendCmd(Msg.MD_AUTHEN_RESPONSE, Msgs.authenResponse(response))
         Logx.i("MD_AUTHEN_RESPONSE отправлен, режим $mode (random ${random.length} символов)")
     }
@@ -914,6 +882,9 @@ class CarLifeMirrorSession(
             return
         }
         touchCount++
+        if (t.masked == 0 || t.masked == 5) {
+            BrightnessController.instance?.onCarTouch()
+        }
         when (t.masked) {
             0 -> {
                 touchSecond = null
@@ -1342,89 +1313,6 @@ class CarLifeMirrorSession(
         return send(Ch.CMD, Wire.cmdInner(Msg.NAVI_INFO, body))
     }
 
-    /**
-     * Секретная диагностика: запрос всех автомобильных подписок и приём
-     * CAR_GPS/CAR_VELOCITY/CAR_GYROSCOPE/CAR_ACCELERATION/CAR_OIL/GEAR_INFO.
-     */
-    private fun carDataTick() {
-        if (closed.get() || !carlifeStarted) return
-        val request = CarDataStore.requestSeq
-        val stop = CarDataStore.stopSeq
-        if (stop != carDataStopSeen) {
-            carDataStopSeen = stop
-            carDataRequestPending = false
-            stopCarDataProbe()
-            return
-        }
-        if (request != carDataRequestSeen) {
-            carDataRequestSeen = request
-            carDataRequestPending = true
-        }
-        if (carDataRequestPending && !carDataStarted) {
-            carDataRequestPending = false
-            startCarDataProbe()
-        }
-    }
-
-    private fun startCarDataProbe() {
-        if (closed.get() || carDataStarted) return
-        carDataStarted = true
-        carDataStartedModules.clear()
-        CarDataStore.onRequested(CarDataParser.allModules)
-        sendCmd(Msg.CAR_DATA_SUBSCRIBE, null)
-        for (id in CarDataParser.allModules) {
-            sendCmd(Msg.CAR_DATA_START_REQ, Msgs.vehicleInfo(id, 1, 0))
-            carDataStartedModules.add(id)
-        }
-        CarDataStore.onStarted(carDataStartedModules)
-        Logx.i("Автоданные: запрошены все модули ${CarDataParser.moduleListText(CarDataParser.allModules)}")
-    }
-
-    private fun stopCarDataProbe() {
-        if (!carDataStarted) return
-        for (id in carDataStartedModules) {
-            sendCmd(Msg.CAR_DATA_STOP_REQ, Msgs.vehicleInfo(id, 0, 0))
-        }
-        carDataStartedModules.clear()
-        carDataStarted = false
-        CarDataStore.onStopped()
-        Logx.i("Автоданные: подписка остановлена")
-    }
-
-    private fun onCarDataSubscribeRsp(body: ByteArray) {
-        val modules = CarDataParser.parseVehicleInfoList(body)
-        if (modules == null) {
-            Logx.w("Автоданные: не разобрал ответ CAR_DATA_SUBSCRIBE")
-            return
-        }
-        CarDataStore.onSupported(modules)
-        // Повторяем START с флагами/частотой из ответа: часть ГУ ждёт именно их.
-        for (m in modules) {
-            if (m.moduleID !in CarDataParser.allModules) continue
-            sendCmd(
-                Msg.CAR_DATA_START_REQ,
-                Msgs.vehicleInfo(m.moduleID, if (m.flag > 0) m.flag else 1, m.frequency),
-            )
-        }
-        Logx.i(
-            "Автоданные: ГУ поддержало " +
-                if (modules.isEmpty()) "ничего" else modules.joinToString(", ") {
-                    "${it.moduleID}/${CarDataParser.moduleName(it.moduleID)} flag=${it.flag} freq=${it.frequency}"
-                }
-        )
-    }
-
-    private fun onCarDataMessage(kind: String, body: ByteArray, fields: Map<String, String>) {
-        CarDataStore.onData(kind, fields, CarDataParser.raw(body))
-        if (carDataLogged.add(kind)) {
-            Logx.i("Автоданные: первый $kind — ${fields.entries.joinToString(", ") { "${it.key}=${it.value}" }}")
-        }
-    }
-
-    private fun syncCarDataSession() {
-        CarDataStore.updateSession(huName, huChannel, protocol, authMode)
-    }
-
     private fun videoWatchdog() {
         if (closed.get() || !carlifeStarted) return
         val now = SystemClock.elapsedRealtime()
@@ -1496,7 +1384,7 @@ class CarLifeMirrorSession(
                 "звук=${audioBytes.get() / 1024} КБ/${audioPackets.get()} пак., " +
                 "звук-очередь=${transport.queueSize(Ch.MEDIA)}, " +
                 "звук-отброшено=${audioDropped.get()}, " +
-                "HU hb=$huHeartbeats/vel=$carVelocity, " +
+                "HU hb=$huHeartbeats, " +
                 "keepalive=$heartbeats, отброшено=$discarded"
         )
         lastStatLogAt = now
@@ -1596,7 +1484,7 @@ class CarLifeMirrorSession(
             )
             appendLine(
                 "Отправлено: $sentFrames кадров (ключевых $keyFrames), $mb МБ, " +
-                    "keepalive $heartbeats, HU heartbeat $huHeartbeats, CAR_VELOCITY $carVelocity"
+                    "keepalive $heartbeats, HU heartbeat $huHeartbeats"
             )
             appendLine(
                 "HUD: SHOW=$naviShows, UPDATE=$naviUpdates, keepalive=$naviKeepalives, " +

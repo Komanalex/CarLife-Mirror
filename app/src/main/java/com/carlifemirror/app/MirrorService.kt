@@ -260,16 +260,6 @@ class MirrorService : Service() {
                     acquireWakeLock()
                     if (settings.systemLandscape) {
                         RotationController.enterLandscape(this)
-                        // Samsung может сбросить фиксацию после смены
-                        // конфигурации Activity или при сворачивании.
-                        main.removeCallbacks(rotationGuard)
-                        main.postDelayed(rotationGuard, 2000)
-                        main.postDelayed({
-                            if (settings.systemLandscape && projection != null) {
-                                RotationController.enterLandscape(this)
-                                RotationController.logState(this, "через 1 с после старта")
-                            }
-                        }, 1000)
                     }
                     val wirelessMode = settings.connectionMode == ConnectMode.WIRELESS
                     MirrorState.update {
@@ -354,7 +344,6 @@ class MirrorService : Service() {
         Logx.i("Сервис остановлен")
         Logx.i("Сервис: onDestroy начало")
         main.removeCallbacks(reconnectRunnable)
-        main.removeCallbacks(rotationGuard)
         main.removeCallbacks(taskCleanup)
         try { brightness.endSession() } catch (_: Exception) {}
         BrightnessController.detach(brightness)
@@ -377,16 +366,6 @@ class MirrorService : Service() {
         autoSaveLog()
         Logx.i("Сервис: onDestroy конец")
         super.onDestroy()
-    }
-
-    private val rotationGuard = object : Runnable {
-        override fun run() {
-            if (closing || projection == null) return
-            if (settings.systemLandscape) {
-                RotationController.ensureLandscape(this@MirrorService)
-            }
-            main.postDelayed(this, 2000)
-        }
     }
 
     private val projectionCallback = object : MediaProjection.Callback() {
@@ -732,7 +711,6 @@ class MirrorService : Service() {
         pendingStopReason = reason
         try { brightness.endSession() } catch (_: Exception) {}
         main.removeCallbacks(reconnectRunnable)
-        main.removeCallbacks(rotationGuard)
         main.removeCallbacks(taskCleanup)
         reconnectAttempts = 0
 

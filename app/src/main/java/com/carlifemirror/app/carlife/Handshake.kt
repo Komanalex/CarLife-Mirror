@@ -136,12 +136,11 @@ object Handshake {
 
     fun moduleStatus(huMajor: Int) = OutCmd(Msg.MODULE_STATUS, Msgs.moduleStatusList(huMajor))
 
-    /** Ответ на STATISTIC_INFO: MD_AUTHEN_RESULT(true), запрос FEATURE_CONFIG, подписка CAR_DATA. */
+    /** Ответ на STATISTIC_INFO: MD_AUTHEN_RESULT(true), запрос FEATURE_CONFIG. */
     fun onStatisticInfo(sendFeatureConfigRequest: Boolean): List<OutCmd> {
         val out = ArrayList<OutCmd>()
         out.add(OutCmd(Msg.MD_AUTHEN_RESULT, Msgs.authenResult(true)))
         if (sendFeatureConfigRequest) out.add(OutCmd(Msg.MD_FEATURE_CONFIG_REQUEST, null))
-        out.add(OutCmd(Msg.CAR_DATA_SUBSCRIBE, null))
         return out
     }
 

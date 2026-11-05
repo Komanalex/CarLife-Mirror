@@ -175,7 +175,6 @@ object Schemas {
     val hardKey = schema("CarlifeCarHardKeyCode", 1 to int("keycode"))
     val connectException = schema("CarlifeConnectException", 1 to int("exceptionType"))
     val errorCode = schema("CarlifeErrorCode", 1 to str("errorCode"))
-    val gearInfo = schema("CarlifeGearInfo", 1 to int("gear"))
     val musicInit = schema("CarlifeMusicInit", 1 to int("sampleRate"), 2 to int("channelConfig"), 3 to int("sampleFormat"))
     val btPairInfo = schema(
         "CarlifeBTPairInfo",
@@ -250,7 +249,6 @@ object Schemas {
         Msg.MODULE_STATUS to moduleStatusList,
         Msg.STATISTIC_INFO to statisticsInfo,
         Msg.MODULE_CONTROL to moduleStatus,
-        Msg.GEAR_INFO to gearInfo,
         Msg.CONNECT_EXCEPTION to connectException,
         Msg.CARLIFE_DATA_SUBSCRIBE to subscribeList,
         Msg.CARLIFE_DATA_SUBSCRIBE_DONE to subscribeList,

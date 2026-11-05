@@ -115,21 +115,16 @@ class Settings(context: Context) {
         set(value) = sp.edit().putBoolean("usb_audio", value).apply()
 
     /**
-     * Передавать turn-by-turn подсказки навигатора на ГУ.
-     * Требует доступа к уведомлениям; без него сообщения не отправляются.
+     * HUD отключён: CNS3 не принимает turn-by-turn ни в одном режиме.
+     * Оставляем поля для чтения старых настроек, но не отправляем сообщения.
      */
     var naviHud: Boolean
-        get() = sp.getBoolean("navi_hud", true)
-        set(value) = sp.edit().putBoolean("navi_hud", value).apply()
+        get() = false
+        set(value) = sp.edit().putBoolean("navi_hud", false).apply()
 
-    /**
-     * Экспериментально: дополнительно отправлять NAVI_INFO (0x1003B,
-     * CarlifeNaviBikeInfo). Для ГУ, которые не принимают стандартный
-     * turn-by-turn; может дублировать или игнорироваться.
-     */
     var naviInfoHud: Boolean
-        get() = sp.getBoolean("navi_info_hud", false)
-        set(value) = sp.edit().putBoolean("navi_info_hud", value).apply()
+        get() = false
+        set(value) = sp.edit().putBoolean("navi_info_hud", false).apply()
 
     /**
      * Поле 6 стандартного NAVI_NEXT_TURN_INFO: PNG-иконка, время до манёвра
@@ -138,14 +133,6 @@ class Settings(context: Context) {
     var naviField6: NaviField6
         get() = NaviField6.fromName(sp.getString("navi_field6", NaviField6.ICON.name))
         set(value) = sp.edit().putString("navi_field6", value.name).apply()
-
-    /**
-     * Секретная диагностика: запрашивать у ГУ все модули автомобильных
-     * данных (GPS, скорость, гироскоп, ускорение, передачу, топливо).
-     */
-    var carDataProbe: Boolean
-        get() = sp.getBoolean("car_data_probe", false)
-        set(value) = sp.edit().putBoolean("car_data_probe", value).apply()
 
     /**
      * Фиксировать системный ландшафт, пока идёт трансляция.
