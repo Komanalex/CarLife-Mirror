@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="huTitle huDesc">
+  <title id="huTitle">Схема вписывания экрана телефона в кадр магнитолы</title>
+  <desc id="huDesc">Два примера: кадр 16:9 с чёрными полями сверху и снизу и широкий кадр 2240 на 976 с полями слева и справа. Экран телефона всегда вписан целиком.</desc>
+  <rect width="1200" height="760" rx="26" fill="#0c1218"/>
+  <text x="56" y="58" fill="#f2b33d" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2.4">ЧТО ВИДИТ МАГНИТОЛА</text>
+  <text x="56" y="102" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">Один экран телефона — разные пропорции кадра</text>
+  <text x="56" y="134" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="15">Схема. Внешний вид меню CarLife зависит от прошивки магнитолы; приложение только передаёт видеокадр.</text>
+
+  <!-- Panel A: 16:9 -->
+  <text x="80" y="192" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Стандартное ГУ · 16:9</text>
+  <text x="80" y="214" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="14">Кадр 1920 × 1080</text>
+
+  <rect x="80" y="232" width="480" height="270" rx="8" fill="#000" stroke="#f2b33d" stroke-width="2"/>
+  <!-- phone content 20:9: 480x216 centered vertically -->
+  <rect x="80" y="259" width="480" height="216" fill="#16232e"/>
+  <!-- status bar -->
+  <rect x="80" y="259" width="480" height="18" fill="#0f1a22"/>
+  <circle cx="99" cy="268" r="2.2" fill="#a8b6c2"/>
+  <rect x="108" y="266" width="28" height="3" rx="1.5" fill="#a8b6c2"/>
+  <rect x="500" y="266" width="12" height="4" rx="1" fill="#a8b6c2"/>
+  <rect x="516" y="266" width="18" height="4" rx="1" fill="#a8b6c2"/>
+  <rect x="538" y="266" width="9" height="4" rx="1" fill="#57c785"/>
+  <!-- faux apps -->
+  <rect x="108" y="303" width="40" height="40" rx="11" fill="#2b4254"/>
+  <rect x="160" y="303" width="40" height="40" rx="11" fill="#3b4f5f"/>
+  <rect x="212" y="303" width="40" height="40" rx="11" fill="#2b4254"/>
+  <rect x="264" y="303" width="40" height="40" rx="11" fill="#3b4f5f"/>
+  <rect x="108" y="357" width="40" height="40" rx="11" fill="#3b4f5f"/>
+  <rect x="160" y="357" width="40" height="40" rx="11" fill="#2b4254"/>
+  <rect x="212" y="357" width="40" height="40" rx="11" fill="#3b4f5f"/>
+  <rect x="264" y="357" width="40" height="40" rx="11" fill="#2b4254"/>
+  <!-- phone label -->
+  <text x="320" y="330" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="600">экран телефона</text>
+  <text x="320" y="354" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="13">20:9 · вписан целиком</text>
+  <!-- dock -->
+  <rect x="148" y="432" width="344" height="30" rx="15" fill="#0f1a22" opacity=".72"/>
+  <circle cx="174" cy="447" r="7" fill="#3b4f5f"/>
+  <circle cx="200" cy="447" r="7" fill="#2b4254"/>
+  <circle cx="226" cy="447" r="7" fill="#3b4f5f"/>
+  <circle cx="252" cy="447" r="7" fill="#2b4254"/>
+  <!-- bars labels -->
+  <line x1="64" y1="259" x2="64" y2="286" stroke="#f07167" stroke-width="2"/>
+  <line x1="64" y1="448" x2="64" y2="475" stroke="#f07167" stroke-width="2"/>
+  <text x="80" y="548" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600">Телефон 20:9 → 1920 × 864</text>
+  <text x="80" y="574" fill="#f07167" font-family="Segoe UI, Arial, sans-serif" font-size="14">чёрные поля по 108 px сверху и снизу</text>
+  <text x="80" y="600" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="13">Если ГУ растягивает кадр, включите на нём режим «оригинал» / «16:9».</text>
+
+  <!-- Panel B: 2.30:1 -->
+  <text x="680" y="192" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700">Ультраширокое ГУ · 2,30:1</text>
+  <text x="680" y="214" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="14">Своё разрешение 2240 × 976</text>
+
+  <rect x="680" y="272.5" width="430.4" height="187.5" rx="8" fill="#000" stroke="#f2b33d" stroke-width="2"/>
+  <!-- phone content 20:9: width 416.7 centered, height 187.5 -->
+  <rect x="686.9" y="272.5" width="416.7" height="187.5" fill="#16232e"/>
+  <rect x="686.9" y="272.5" width="416.7" height="16" fill="#0f1a22"/>
+  <circle cx="703.2" cy="280.5" r="2" fill="#a8b6c2"/>
+  <rect x="711.2" y="279" width="24" height="3" rx="1.5" fill="#a8b6c2"/>
+  <rect x="1010" y="279" width="11" height="4" rx="1" fill="#a8b6c2"/>
+  <rect x="1025" y="279" width="16" height="4" rx="1" fill="#a8b6c2"/>
+  <rect x="1045" y="279" width="8" height="4" rx="1" fill="#57c785"/>
+  <rect x="728" y="304" width="32" height="32" rx="9" fill="#2b4254"/>
+  <rect x="770" y="304" width="32" height="32" rx="9" fill="#3b4f5f"/>
+  <rect x="812" y="304" width="32" height="32" rx="9" fill="#2b4254"/>
+  <rect x="854" y="304" width="32" height="32" rx="9" fill="#3b4f5f"/>
+  <rect x="728" y="346" width="32" height="32" rx="9" fill="#3b4f5f"/>
+  <rect x="770" y="346" width="32" height="32" rx="9" fill="#2b4254"/>
+  <rect x="812" y="346" width="32" height="32" rx="9" fill="#3b4f5f"/>
+  <rect x="854" y="346" width="32" height="32" rx="9" fill="#2b4254"/>
+  <rect x="930" y="300" width="164" height="62" rx="10" fill="#0f1a22" opacity=".72"/>
+  <text x="946" y="324" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600">экран телефона</text>
+  <text x="946" y="346" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="12">20:9 · вписан целиком</text>
+  <rect x="800" y="400" width="240" height="26" rx="13" fill="#0f1a22" opacity=".72"/>
+  <circle cx="824" cy="413" r="6" fill="#3b4f5f"/>
+  <circle cx="846" cy="413" r="6" fill="#2b4254"/>
+  <circle cx="868" cy="413" r="6" fill="#3b4f5f"/>
+  <circle cx="890" cy="413" r="6" fill="#2b4254"/>
+  <!-- side bar markers -->
+  <line x1="680" y1="252" x2="687" y2="252" stroke="#f07167" stroke-width="2"/>
+  <line x1="1110" y1="252" x2="1142" y2="252" stroke="#f07167" stroke-width="2"/>
+  <text x="680" y="548" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600">Телефон 20:9 → 2169 × 976</text>
+  <text x="680" y="574" fill="#f07167" font-family="Segoe UI, Arial, sans-serif" font-size="14">чёрные поля примерно по 36 px слева и справа</text>
+  <text x="680" y="600" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="13">Касания в чёрных полях игнорируются: они не попадают в область телефона.</text>
+
+  <!-- Legend -->
+  <line x1="56" y1="636" x2="1144" y2="636" stroke="#263440" stroke-width="1"/>
+  <rect x="56" y="664" width="26" height="16" rx="3" fill="#16232e" stroke="#f2b33d" stroke-width="2"/>
+  <text x="94" y="678" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="13">видеокадр (H.264)</text>
+  <rect x="286" y="664" width="26" height="16" rx="3" fill="#000" stroke="#263440" stroke-width="1"/>
+  <text x="324" y="678" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="13">чёрные поля</text>
+  <rect x="476" y="664" width="26" height="16" rx="3" fill="#16232e"/>
+  <text x="514" y="678" fill="#f2f6f8" font-family="Segoe UI, Arial, sans-serif" font-size="13">экран телефона</text>
+  <text x="680" y="678" fill="#a8b6c2" font-family="Segoe UI, Arial, sans-serif" font-size="13">Пропорции телефона не меняются: приложение не растягивает картинку.</text>
+  <text x="56" y="716" fill="#f2b33d" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600">Совет: если чёрные поля не нужны, подберите кадр под пропорции экрана телефона и режим отображения магнитолы. Гарантий для чужой прошивки нет.</text>
+</svg>

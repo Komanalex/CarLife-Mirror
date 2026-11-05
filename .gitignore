@@ -1,0 +1,26 @@
+*.iml
+.gradle/
+.kotlin/
+local.properties
+.idea/
+.DS_Store
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local validation artifacts
+*.log
+*.png
+*.xml
+!app/src/main/res/**/*.xml
+!app/src/main/AndroidManifest.xml
+
+# GitHub publication: local builds, APKs, logs and backups
+/carlifemirror.*.apk
+/logs/
+/app/src/main/res-backup/
+*.jks
+*.keystore
+!docs/manual/img/*.png
