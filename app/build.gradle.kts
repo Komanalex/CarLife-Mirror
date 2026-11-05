@@ -1,5 +1,14 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
+}
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -10,8 +19,19 @@ android {
         applicationId = "com.carlifemirror.app"
         minSdk = 29
         targetSdk = 36
-        versionCode = 49
-        versionName = "2.4.1"
+        versionCode = 50
+        versionName = "2.4.2"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -20,8 +40,9 @@ android {
         }
         release {
             isMinifyEnabled = false
-            // Build a release APK with: ./gradlew assembleRelease
-            // It is unsigned until a signing config is added.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -40,7 +61,15 @@ tasks.register<Copy>("copyNamedDebugApk") {
     from(layout.buildDirectory.dir("outputs/apk/debug"))
     include("app-debug.apk")
     into(layout.buildDirectory.dir("outputs/named"))
-    rename { "carlifemirror.2.4.1.apk" }
+    rename { "carlifemirror.2.4.2.apk" }
+}
+
+tasks.register<Copy>("copyNamedReleaseApk") {
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.dir("outputs/apk/release"))
+    include("app-release.apk")
+    into(layout.buildDirectory.dir("outputs/named"))
+    rename { "carlifemirror.2.4.2-release.apk" }
 }
 
 dependencies {

@@ -24,4 +24,5 @@ docs/
 /app/src/main/res-backup/
 *.jks
 *.keystore
+/keystore.properties
 !docs/manual/img/*.png
