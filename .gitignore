@@ -9,6 +9,7 @@ app/build/
 captures/
 .externalNativeBuild/
 .cxx/
+docs/
 
 # Local validation artifacts
 *.log
