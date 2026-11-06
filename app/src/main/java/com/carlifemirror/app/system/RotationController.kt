@@ -47,6 +47,7 @@ object RotationController {
     private var portraitPackage: String? = null
     private var portraitLogged: String? = null
     private var pendingLandscape: Runnable? = null
+    private var landscapeRetries = 0
     private val portraitOrientations = setOf(
         ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
         ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT,
@@ -93,14 +94,44 @@ object RotationController {
         if (!canWrite(context)) return false
         val rotation = displayRotation(context)
         if (rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270) {
+            landscapeRetries = 0
             return true
         }
-        Logx.i("Поворот системы: возвращаю ландшафт после смены приложения (дисплей=$rotation)")
-        return enterLandscape(context)
+        if (landscapeRetries == 0) {
+            Logx.i("Поворот системы: возвращаю ландшафт после смены приложения (дисплей=$rotation)")
+        }
+        enterLandscape(context)
+        val after = displayRotation(context)
+        if (after == Surface.ROTATION_90 || after == Surface.ROTATION_270) {
+            landscapeRetries = 0
+            return true
+        }
+        if (landscapeRetries >= 8) {
+            landscapeRetries = 0
+            Logx.w("Поворот системы: ландшафт не возвращается после 8 попыток")
+            return false
+        }
+        landscapeRetries++
+        scheduleLandscapeRetry(context)
+        return false
+    }
+
+    private fun scheduleLandscapeRetry(context: Context) {
+        val app = context.applicationContext
+        pendingLandscape?.let { main.removeCallbacks(it) }
+        val action = Runnable {
+            pendingLandscape = null
+            if (MirrorState.value.projectionReady) {
+                ensureLandscape(app)
+            }
+        }
+        pendingLandscape = action
+        main.postDelayed(action, 500L)
     }
 
     private fun scheduleLandscape(context: Context) {
         val app = context.applicationContext
+        landscapeRetries = 0
         pendingLandscape?.let { main.removeCallbacks(it) }
         val action = Runnable {
             if (MirrorState.value.projectionReady) {
@@ -114,6 +145,7 @@ object RotationController {
     fun resetPortraitTracking() {
         pendingLandscape?.let { main.removeCallbacks(it) }
         pendingLandscape = null
+        landscapeRetries = 0
         portraitPackage = null
         portraitLogged = null
     }
