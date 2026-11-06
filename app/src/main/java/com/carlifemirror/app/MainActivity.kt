@@ -1077,7 +1077,7 @@ open class MainActivity : Activity() {
             if (snapshot.accessibilityEnabled) R.string.accessibility_on else R.string.accessibility_off
         )
         accessibilityStatus.setTextColor(getColor(
-            if (snapshot.accessibilityEnabled) R.color.success else R.color.text_muted
+            if (snapshot.accessibilityEnabled) R.color.success else R.color.warning
         ))
         accessibilityButton.text = getString(
             if (snapshot.accessibilityEnabled) R.string.accessibility_check else R.string.accessibility_setup
