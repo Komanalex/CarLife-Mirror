@@ -217,6 +217,8 @@ class MirrorService : Service() {
             }
 
             ACTION_START -> {
+                Logx.rotateForNewSession(this)
+                Logx.i("Старт: новая сессия трансляции")
                 startForegroundCompat(buildNotification(MirrorState.value))
                 reconnectAttempts = 0
                 main.removeCallbacks(reconnectRunnable)

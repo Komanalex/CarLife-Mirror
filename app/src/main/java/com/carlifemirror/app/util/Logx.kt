@@ -325,6 +325,25 @@ object Logx {
     fun currentFilePath(): String = displayPath ?: "не создан"
 
     /**
+     * Новый файл на каждую сессию трансляции. Иначе все сессии процесса
+     * дописываются в один MediaStore-файл.
+     */
+    fun rotateForNewSession(context: Context) {
+        val app = context.applicationContext
+        synchronized(lock) {
+            appContext = app
+            closeStreamLocked()
+            lines.clear()
+            downloadUri = null
+            displayPath = null
+            fileBytes = 0L
+            linesSinceClose = 0
+            fileLimitWarned = false
+            createDownloadLog(app)
+        }
+    }
+
+    /**
      * Журнал уже пишется прямо в Загрузки. Метод оставлен для кнопки
      * «Сохранить журнал» и автосохранения: возвращает актуальный путь.
      */

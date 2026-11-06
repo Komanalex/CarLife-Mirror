@@ -19,6 +19,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.carlifemirror.app.MirrorState
+import com.carlifemirror.app.Settings as AppSettings
 import com.carlifemirror.app.system.BrightnessController
 import com.carlifemirror.app.system.RotationController
 import com.carlifemirror.app.util.Logx
@@ -46,6 +47,13 @@ class MirrorAccessibilityService : AccessibilityService() {
     private var splitRatioDispatched = false
     private var splitRatioDispatchedAt = 0L
     private var splitRatioGaveUpLogged = false
+    private var lastSplitAppsRefreshAt = 0L
+    private val splitAppsPoll = object : Runnable {
+        override fun run() {
+            refreshSplitApps()
+            main.postDelayed(this, SPLIT_APPS_POLL_MS)
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -58,6 +66,10 @@ class MirrorAccessibilityService : AccessibilityService() {
                 val wanted = current.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
                 if (wanted != current.flags) {
                     current.flags = wanted
+                }
+                val wantedEvents = current.eventTypes or AccessibilityEvent.TYPE_WINDOWS_CHANGED
+                if (wantedEvents != current.eventTypes) {
+                    current.eventTypes = wantedEvents
                 }
                 setServiceInfo(current)
             }
@@ -74,10 +86,13 @@ class MirrorAccessibilityService : AccessibilityService() {
             Logx.w("Служба управления: нет доступа к границам окон; выключите и включите службу заново")
         }
         BrightnessController.instance?.onAccessibilityReady()
+        main.removeCallbacks(splitAppsPoll)
+        main.postDelayed(splitAppsPoll, SPLIT_APPS_POLL_MS)
     }
 
     override fun onDestroy() {
         BrightnessController.instance?.onAccessibilityLost()
+        main.removeCallbacks(splitAppsPoll)
         if (instance === this) instance = null
         // Не сбрасываем статус вслепую: система может пересоздать подключение.
         // Если службу действительно выключили в настройках, isEnabled вернёт false.
@@ -89,10 +104,51 @@ class MirrorAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val type = event?.eventType ?: return
+        if (type == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+            refreshSplitApps()
+            return
+        }
         if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         RotationController.onForegroundActivity(this, pkg, event.className?.toString())
         onWindowEvent(event, pkg, 2)
+    }
+
+    /**
+     * Резервная проверка набора приложений в split. Порядок панелей не
+     * сравнивается, поэтому свап не считается изменением пары.
+     */
+    fun refreshSplitApps() {
+        if (!MirrorState.value.projectionReady) return
+        if (!AppSettings(this).splitSessionActive) return
+        val now = SystemClock.uptimeMillis()
+        if (now - lastSplitAppsRefreshAt < 300L) return
+        lastSplitAppsRefreshAt = now
+        val pair = findSplitPair() ?: return
+        val current = try {
+            windows
+        } catch (_: Exception) {
+            null
+        } ?: return
+        var firstPkg: String? = null
+        var secondPkg: String? = null
+        for (win in current) {
+            try {
+                if (win.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                val pkg = windowPackage(win) ?: continue
+                val bounds = Rect()
+                win.getBoundsInScreen(bounds)
+                if (sameBounds(bounds, pair.first)) {
+                    firstPkg = pkg
+                } else if (sameBounds(bounds, pair.second)) {
+                    secondPkg = pkg
+                }
+            } catch (_: Exception) {
+            }
+        }
+        val first = firstPkg ?: return
+        val second = secondPkg ?: return
+        SplitWindowTracker.updateFromPanes(this, first, second)
     }
 
     private fun onWindowEvent(event: AccessibilityEvent, pkg: String, retries: Int) {
@@ -734,6 +790,7 @@ class MirrorAccessibilityService : AccessibilityService() {
         private const val RATIO_STABLE_MS = 700L
         private const val RATIO_VERIFY_MS = 1_500L
         private const val RATIO_DRAG_DURATION_MS = 700L
+        private const val SPLIT_APPS_POLL_MS = 700L
 
         @Volatile var instance: MirrorAccessibilityService? = null
             private set

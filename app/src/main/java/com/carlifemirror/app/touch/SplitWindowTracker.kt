@@ -82,6 +82,39 @@ object SplitWindowTracker {
         Logx.i("Разделение экрана: в $pane окне теперь $label ($component)")
     }
 
+    /**
+     * Резервное обновление по набору окон. Сравнивается только множество
+     * приложений, без порядка панелей: свап не меняет набор и игнорируется.
+     */
+    @Synchronized
+    fun updateFromPanes(context: Context, firstPackage: String, secondPackage: String) {
+        if (!MirrorState.value.projectionReady) return
+        val settings = Settings(context)
+        if (!settings.splitSessionActive) return
+        if (firstPackage.isBlank() || secondPackage.isBlank()) return
+        if (firstPackage == secondPackage) return
+        val pm = context.packageManager
+        if (firstPackage == context.packageName || secondPackage == context.packageName) return
+        if (isIgnored(firstPackage) || isIgnored(secondPackage)) return
+        if (firstPackage == homePackage(pm) || secondPackage == homePackage(pm)) return
+        val firstFlat = launchFlat(pm, firstPackage) ?: return
+        val secondFlat = launchFlat(pm, secondPackage) ?: return
+        if (firstFlat == secondFlat) return
+
+        val oldFirst = settings.lastSplitFirstApp
+        val oldSecond = settings.lastSplitApp
+        val oldSet = setOf(oldFirst, oldSecond).filter { it.isNotBlank() }.toSet()
+        val newSet = setOf(firstFlat, secondFlat)
+        if (oldSet == newSet) return
+
+        settings.lastSplitFirstApp = firstFlat
+        settings.lastSplitApp = secondFlat
+        Logx.i("Разделение экрана: набор окон изменился first=$firstFlat second=$secondFlat")
+    }
+
+    private fun launchFlat(pm: PackageManager, packageName: String): String? =
+        pm.getLaunchIntentForPackage(packageName)?.component?.flattenToString()
+
     private fun isIgnored(packageName: String): Boolean {
         if (packageName in ignoredPackages) return true
         if (packageName.startsWith("com.android.settings")) return true
