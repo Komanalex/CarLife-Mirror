@@ -1,11 +1,17 @@
 package com.carlifemirror.app.system
 
 import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Display
 import android.view.Surface
+import com.carlifemirror.app.MirrorState
 import com.carlifemirror.app.util.Logx
 
 /**
@@ -35,6 +41,100 @@ object RotationController {
         Settings.System.canWrite(context)
     } catch (_: Exception) {
         false
+    }
+
+    private val main = Handler(Looper.getMainLooper())
+    private var portraitPackage: String? = null
+    private var portraitLogged: String? = null
+    private var pendingLandscape: Runnable? = null
+    private val portraitOrientations = setOf(
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+        ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT,
+        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT,
+        ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT,
+    )
+
+    /**
+     * Вызывается службой доступности при смене foreground-activity.
+     * Пока открыто портретное приложение, ландшафт не навязываем; после
+     * выхода из него возвращаем системный ландшафт.
+     */
+    fun onForegroundActivity(context: Context, packageName: String, className: String?) {
+        if (!MirrorState.value.projectionReady) {
+            resetPortraitTracking()
+            return
+        }
+        if (packageName.isBlank()) return
+        if (packageName == context.packageName) {
+            portraitPackage = null
+            portraitLogged = null
+            scheduleLandscape(context)
+            return
+        }
+        if (isPortraitActivity(context, packageName, className)) {
+            portraitPackage = packageName
+            if (portraitLogged != packageName) {
+                portraitLogged = packageName
+                Logx.i("Поворот системы: портретное приложение $packageName, оставляю портрет")
+            }
+            return
+        }
+        if (portraitPackage != null) {
+            Logx.i("Поворот системы: выход из портретного приложения $portraitPackage")
+        }
+        portraitPackage = null
+        portraitLogged = null
+        scheduleLandscape(context)
+    }
+
+    fun ensureLandscape(context: Context): Boolean {
+        if (!MirrorState.value.projectionReady) return false
+        if (!com.carlifemirror.app.Settings(context).systemLandscape) return false
+        if (!canWrite(context)) return false
+        val rotation = displayRotation(context)
+        if (rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270) {
+            return true
+        }
+        Logx.i("Поворот системы: возвращаю ландшафт после смены приложения (дисплей=$rotation)")
+        return enterLandscape(context)
+    }
+
+    private fun scheduleLandscape(context: Context) {
+        val app = context.applicationContext
+        pendingLandscape?.let { main.removeCallbacks(it) }
+        val action = Runnable {
+            if (MirrorState.value.projectionReady) {
+                ensureLandscape(app)
+            }
+        }
+        pendingLandscape = action
+        main.postDelayed(action, 400L)
+    }
+
+    fun resetPortraitTracking() {
+        pendingLandscape?.let { main.removeCallbacks(it) }
+        pendingLandscape = null
+        portraitPackage = null
+        portraitLogged = null
+    }
+
+    private fun isPortraitActivity(
+        context: Context,
+        packageName: String,
+        className: String?,
+    ): Boolean {
+        if (className.isNullOrBlank()) return false
+        return try {
+            val info = context.packageManager.getActivityInfo(
+                ComponentName(packageName, className),
+                0,
+            )
+            info.screenOrientation in portraitOrientations
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** Фиксирует системный ландшафт. */
@@ -93,6 +193,7 @@ object RotationController {
     @SuppressLint("ApplySharedPref")
     @Synchronized
     fun restore(context: Context) {
+        resetPortraitTracking()
         val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!sp.getBoolean(KEY_MODIFIED, false)) return
         if (!canWrite(context)) {

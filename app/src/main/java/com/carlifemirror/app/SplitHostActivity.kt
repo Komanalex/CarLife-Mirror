@@ -10,6 +10,7 @@ import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.FrameLayout
+import com.carlifemirror.app.system.RotationController
 import com.carlifemirror.app.util.Logx
 
 /**
@@ -62,13 +63,17 @@ class SplitHostActivity : Activity() {
         if (pendingFirst) {
             scheduleFirstRetry()
         }
+        RotationController.ensureLandscape(this)
     }
 
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
         super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
         multiWindowObserved = isInMultiWindowMode
         Logx.i("Split-host: мультиокно ${if (isInMultiWindowMode) "включено" else "выключено"}")
-        if (isInMultiWindowMode) scheduleFirst()
+        if (isInMultiWindowMode) {
+            scheduleFirst()
+            RotationController.ensureLandscape(this)
+        }
     }
 
     private fun openSecond() {

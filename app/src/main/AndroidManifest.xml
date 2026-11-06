@@ -103,6 +103,7 @@
         <activity
             android:name=".SplitHostActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="standard"
             android:resizeableActivity="true"

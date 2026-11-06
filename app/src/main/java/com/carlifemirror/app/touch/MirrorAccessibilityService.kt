@@ -20,6 +20,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.carlifemirror.app.MirrorState
 import com.carlifemirror.app.system.BrightnessController
+import com.carlifemirror.app.system.RotationController
 import com.carlifemirror.app.util.Logx
 
 /**
@@ -90,6 +91,7 @@ class MirrorAccessibilityService : AccessibilityService() {
         val type = event?.eventType ?: return
         if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
+        RotationController.onForegroundActivity(this, pkg, event.className?.toString())
         onWindowEvent(event, pkg, 2)
     }
 
