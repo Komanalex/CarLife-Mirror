@@ -36,6 +36,8 @@ object RotationController {
     private const val KEY_MODIFIED = "modified"
     private const val KEY_AUTO = "saved_auto_rotate"
     private const val KEY_USER = "saved_user_rotation"
+    private const val KEY_HOME_PORTRAIT = "saved_home_portrait_only"
+    private const val HOME_PORTRAIT_KEY = "sehome_portrait_mode_only"
 
     fun canWrite(context: Context): Boolean = try {
         Settings.System.canWrite(context)
@@ -181,12 +183,21 @@ object RotationController {
         if (!sp.getBoolean(KEY_MODIFIED, false)) {
             val auto = getInt(context, Settings.System.ACCELEROMETER_ROTATION, 1)
             val user = getInt(context, Settings.System.USER_ROTATION, Surface.ROTATION_0)
+            val homePortrait = getGlobal(context, HOME_PORTRAIT_KEY, -1)
             sp.edit()
                 .putInt(KEY_AUTO, auto)
                 .putInt(KEY_USER, user)
+                .putInt(KEY_HOME_PORTRAIT, homePortrait)
                 .putBoolean(KEY_MODIFIED, true)
                 .commit()
-            Logx.i("Поворот системы: сохранил авто=$auto, user=$user")
+            Logx.i("Поворот системы: сохранил авто=$auto, user=$user, home=$homePortrait")
+        }
+        // Samsung Launcher удерживает домашний экран в портрете отдельной
+        // глобальной настройкой. На время трансляции снимаем этот запрет,
+        // иначе рабочий стол остаётся вертикальным независимо от user_rotation.
+        val homeOk = putGlobal(context, HOME_PORTRAIT_KEY, 0)
+        if (!homeOk) {
+            Logx.w("Поворот системы: нет доступа к $HOME_PORTRAIT_KEY (нужен WRITE_SECURE_SETTINGS)")
         }
         // Сначала выключаем автоповорот, затем фиксируем user-rotation:
         // на Samsung это удерживает split горизонтальным.
@@ -234,17 +245,22 @@ object RotationController {
         }
         val auto = sp.getInt(KEY_AUTO, 1)
         val user = sp.getInt(KEY_USER, Surface.ROTATION_0)
+        val homePortrait = sp.getInt(KEY_HOME_PORTRAIT, -1)
         // USER_ROTATION — только для текущего положения; главное для системных
         // экранов — вернуть ACCELEROMETER_ROTATION, иначе рабочий стол остаётся
         // в портрете, хотя приложения умеют поворачиваться сами.
         putInt(context, Settings.System.USER_ROTATION, user)
         putInt(context, Settings.System.ACCELEROMETER_ROTATION, auto)
+        if (homePortrait >= 0) {
+            putGlobal(context, HOME_PORTRAIT_KEY, homePortrait)
+        }
         sp.edit()
             .remove(KEY_MODIFIED)
             .remove(KEY_AUTO)
             .remove(KEY_USER)
+            .remove(KEY_HOME_PORTRAIT)
             .commit()
-        Logx.i("Поворот системы: восстановлен авто=$auto, user=$user")
+        Logx.i("Поворот системы: восстановлен авто=$auto, user=$user, home=$homePortrait")
     }
 
     /**
@@ -273,6 +289,19 @@ object RotationController {
 
     private fun putInt(context: Context, name: String, value: Int): Boolean = try {
         Settings.System.putInt(context.contentResolver, name, value)
+    } catch (e: Exception) {
+        Logx.w("Поворот системы: $name=$value не применён: ${e.message}")
+        false
+    }
+
+    private fun getGlobal(context: Context, name: String, def: Int): Int = try {
+        Settings.Global.getInt(context.contentResolver, name, def)
+    } catch (_: Exception) {
+        def
+    }
+
+    private fun putGlobal(context: Context, name: String, value: Int): Boolean = try {
+        Settings.Global.putInt(context.contentResolver, name, value)
     } catch (e: Exception) {
         Logx.w("Поворот системы: $name=$value не применён: ${e.message}")
         false
