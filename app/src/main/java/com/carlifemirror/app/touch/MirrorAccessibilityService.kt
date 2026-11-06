@@ -39,6 +39,7 @@ class MirrorAccessibilityService : AccessibilityService() {
     private var multiActive = false
     private var lastMultiMoveAt = 0L
     private var lastBoundsDiagnosticPackage = ""
+    private var lastInjectedGestureAt = 0L
     private var splitRatioTarget = -1
     private var splitRatioDrags = 0
     private var splitRatioLastDragAt = 0L
@@ -67,7 +68,9 @@ class MirrorAccessibilityService : AccessibilityService() {
                 if (wanted != current.flags) {
                     current.flags = wanted
                 }
-                val wantedEvents = current.eventTypes or AccessibilityEvent.TYPE_WINDOWS_CHANGED
+                val wantedEvents = current.eventTypes or
+                    AccessibilityEvent.TYPE_WINDOWS_CHANGED or
+                    AccessibilityEvent.TYPE_TOUCH_INTERACTION_START
                 if (wantedEvents != current.eventTypes) {
                     current.eventTypes = wantedEvents
                 }
@@ -104,6 +107,15 @@ class MirrorAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val type = event?.eventType ?: return
+        if (type == AccessibilityEvent.TYPE_TOUCH_INTERACTION_START) {
+            // События от наших собственных dispatchGesture не должны
+            // считаться физическим касанием телефона.
+            val injectedAgo = SystemClock.uptimeMillis() - lastInjectedGestureAt
+            if (injectedAgo > INJECTED_TOUCH_SUPPRESS_MS) {
+                BrightnessController.instance?.onPhoneTouch()
+            }
+            return
+        }
         if (type == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
             refreshSplitApps()
             return
@@ -779,7 +791,10 @@ class MirrorAccessibilityService : AccessibilityService() {
     }
 
     private fun dispatch(g: GestureDescription): Boolean = try {
-        dispatchGesture(g, null, main)
+        lastInjectedGestureAt = SystemClock.uptimeMillis()
+        val sent = dispatchGesture(g, null, main)
+        lastInjectedGestureAt = SystemClock.uptimeMillis()
+        sent
     } catch (e: Exception) {
         Logx.w("Жест не отправлен: ${e.message}")
         false
@@ -791,6 +806,7 @@ class MirrorAccessibilityService : AccessibilityService() {
         private const val RATIO_VERIFY_MS = 1_500L
         private const val RATIO_DRAG_DURATION_MS = 700L
         private const val SPLIT_APPS_POLL_MS = 700L
+        private const val INJECTED_TOUCH_SUPPRESS_MS = 1_000L
 
         @Volatile var instance: MirrorAccessibilityService? = null
             private set

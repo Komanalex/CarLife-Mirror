@@ -8,7 +8,6 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import com.carlifemirror.app.MirrorState
 import com.carlifemirror.app.audio.MirrorAudioCapture
-import com.carlifemirror.app.system.BrightnessController
 import com.carlifemirror.app.Phase
 import com.carlifemirror.app.Settings
 import com.carlifemirror.app.link.CarTransport
@@ -882,9 +881,8 @@ class CarLifeMirrorSession(
             return
         }
         touchCount++
-        if (t.masked == 0 || t.masked == 5) {
-            BrightnessController.instance?.onCarTouch()
-        }
+        // Касания с магнитолы не должны менять яркость телефона. Яркость
+        // возвращается только при физическом касании экрана телефона.
         when (t.masked) {
             0 -> {
                 touchSecond = null

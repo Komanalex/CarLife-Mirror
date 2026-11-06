@@ -66,15 +66,15 @@ class BrightnessController(
         }
     }
 
-    /** Касание с экрана магнитолы. */
+    /** Касание непосредственно экрана телефона (не экрана магнитолы). */
     @Synchronized
-    fun onCarTouch() {
+    fun onPhoneTouch() {
         if (!sessionActive) return
         if (dimmed) {
             // Возвращаем яркость, но само касание не перехватываем: оно должно
             // дойти до приложения под трансляцией.
             restoreOriginal(clearSnapshot = false)
-            Logx.i("Яркость: касание с магнитолы, восстановлена на 5 секунд")
+            Logx.i("Яркость: касание экрана телефона, восстановлена на 5 секунд")
         }
         handler.removeCallbacks(redim)
         handler.postDelayed(redim, DIM_REDELAY_MS)
