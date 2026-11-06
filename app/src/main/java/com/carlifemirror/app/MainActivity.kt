@@ -165,6 +165,7 @@ open class MainActivity : Activity() {
     private var autoStartAttempted = false
     private var backCallback: OnBackInvokedCallback? = null
     private var lastProjectionReady = false
+    private var projectionDenied = false
 
     private val startAfterRotation = Runnable {
         val start = pendingServiceStart
@@ -1000,7 +1001,11 @@ open class MainActivity : Activity() {
             } else {
                 View.GONE
             }
-        val color = if (missingPermissions()) getColor(R.color.error) else statusColor(snapshot)
+        val color = if (projectionDenied || missingPermissions()) {
+            getColor(R.color.hero_error)
+        } else {
+            statusColor(snapshot)
+        }
         heroIcon.imageTintList = ColorStateList.valueOf(color)
 
         val streaming = snapshot.projectionReady
@@ -1465,6 +1470,7 @@ open class MainActivity : Activity() {
     }
 
     private fun launchProjection() {
+        projectionDenied = false
         val mpm = getSystemService(MediaProjectionManager::class.java)
         try {
             val captureIntent = if (Build.VERSION.SDK_INT >= 34) {
@@ -1511,6 +1517,7 @@ open class MainActivity : Activity() {
         pendingServiceStart = null
         window.decorView.removeCallbacks(startAfterRotation)
         if (resultCode == RESULT_OK && data != null) {
+            projectionDenied = false
             startingService = true
             if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
                 startMirrorService(data)
@@ -1522,6 +1529,7 @@ open class MainActivity : Activity() {
                 window.decorView.postDelayed(startAfterRotation, ORIENTATION_FALLBACK_MS)
             }
         } else {
+            projectionDenied = true
             startingService = false
             if (MirrorState.value.projectionReady) stopMirror()
             MirrorState.update {

@@ -16,6 +16,7 @@
     <color name="on_accent">#FFFFFF</color>
     <color name="success">#35D0A0</color>
     <color name="error">#FF7A70</color>
+    <color name="hero_error">#E85A54</color>
     <color name="warning">#FFAE55</color>
     <color name="brand_icon_color">#1E5DF0</color>
     <color name="transparent">#00000000</color>
