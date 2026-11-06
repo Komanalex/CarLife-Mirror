@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">CarLife Mirror</string>
     <string name="accessibility_service_name">CarLife Mirror: управление</string>
-    <string name="accessibility_description">Передаёт касания с CarLife-магнитолы на экран телефона и определяет границы окон для восстановления двух приложений. Служба не читает текст и не сохраняет содержимое окон.</string>
+    <string name="accessibility_description">Передаёт касания с ГУ на экран телефона и определяет границы окон для восстановления двух приложений. Служба не читает текст и не сохраняет содержимое окон.</string>
 
     <string name="start_mirror">Начать трансляцию</string>
     <string name="stop_mirror">Остановить</string>
@@ -10,14 +10,14 @@
     <string name="split_screen_desc">Открыть выбранное приложение во втором окне рядом</string>
     <string name="split_auto_title">Автоматически делить экран</string>
     <string name="split_auto_sub">После старта трансляции открыть выбранные приложения в режиме Split.</string>
-    <string name="split_first_app_title">Первое приложение (левое окно)</string>
+    <string name="split_first_app_title">Первое приложение (левое/верхнее окно)</string>
     <string name="split_first_app_default">CarLife Mirror (по умолчанию)</string>
     <string name="split_first_choose_app">Приложение для первого окна</string>
-    <string name="split_app_title">Второе приложение (правое окно)</string>
+    <string name="split_app_title">Второе приложение (правое/нижнее окно)</string>
     <string name="split_app_none">Не выбрано — нажмите, чтобы выбрать</string>
     <string name="split_app_action">Выбрать</string>
     <string name="split_ratio_title">Пропорция экранов</string>
-    <string name="split_ratio_sub" formatted="false">Первый экран — слева или сверху, второй — справа или снизу. Доступно 30–70%, шаг 10%.</string>
+    <string name="split_ratio_sub" formatted="false">Первый экран — слева или сверху, второй — справа или снизу. Доступный интервал 30–70%, шаг 10%.</string>
     <string name="split_ratio_default" formatted="false">Первый: 50% · Второй: 50%</string>
     <string name="split_ratio_value">Первый: %1$d%% · Второй: %2$d%%</string>
     <string name="split_ratio_min">0%</string>
@@ -29,7 +29,7 @@
     <string name="split_open_failed">Не удалось открыть второе приложение: %1$s</string>
     <string name="split_auto_no_app">Второе приложение не выбрано. Выберите его в настройках.</string>
     <string name="remember_split_title">Сохранять последние приложения</string>
-    <string name="remember_split_sub">Запоминать последние пользовательские приложения в режиме Split при выходе из приложения, и запускать их при старте, иначе - указанные выше.</string>
+    <string name="remember_split_sub">Запоминать последние пользовательские приложения в режиме Split при выходе из приложения и запускать их при старте, иначе запускать указанные в настройках.</string>
     <string name="split_same_app">Выберите разные приложения для двух окон.</string>
     <string name="system_landscape_title">Фиксировать альбомный вид</string>
     <string name="system_landscape_sub">Пока идёт трансляция блокировать систему в альбомном виде; после остановки вернуть как было. Системный автоповорот на это время отключается.</string>
@@ -62,17 +62,17 @@
     <string name="fps_60">60 FPS</string>
     <string name="fps_note">Доступны 15, 30 или 60 FPS для любого разрешения. При нагреве телефона приложение может временно снизить FPS и битрейт. 60 FPS требует совместимого ГУ и достаточной пропускной способности USB или Wi-Fi.</string>
     <string name="usb_audio_title">Трансляция звука</string>
-    <string name="usb_audio_sub">Передавать звук приложений на магнитолу по USB или Wi-Fi. Нужно разрешение «Запись звука».</string>
-    <string name="usb_audio_permission_missing">Разрешение «Запись звука» не выдано — звук на магнитолу передаваться не будет.</string>
+    <string name="usb_audio_sub">Передавать звук приложений на ГУ по USB или Wi-Fi. Нужно разрешение «Запись звука».</string>
+    <string name="usb_audio_permission_missing">Разрешение «Запись звука» не выдано — звук на ГУ передаваться не будет.</string>
     <string name="usb_audio_permission_denied">Без разрешения на запись звука передача звука отключена.</string>
     <string name="auto_start_title">Автотрансляция</string>
     <string name="auto_start_sub">Запускать трансляцию экрана автоматически при запуске приложения. Системный запрос на разрешения захвата остается.</string>
-    <string name="touch_title">Управление касанием</string>
-    <string name="touch_sub">Касания с магнитолы через службу доступности</string>
+    <string name="touch_title">Управление касаниями</string>
+    <string name="touch_sub">Передавать касания с ГУ на телефон через службу доступности</string>
     <string name="dim_screen_title">Гасить экран</string>
-    <string name="dim_screen_sub">Экран затемняется до выбранной яркости, пока идёт трансляция. Касание экрана телефона временно возвращает обычную яркость, касания магнитолы яркость не меняют.</string>
+    <string name="dim_screen_sub">Экран затемняется до выбранной яркости, пока идёт трансляция. Касание экрана телефона не возвращает обычную яркость.</string>
     <string name="brightness_dim_title">Яркость затемнения</string>
-    <string name="brightness_dim_sub">Касание экрана телефона возвращает обычную яркость на 5 секунд, затем экран снова затемняется. Касания магнитолы яркость не меняют. 0% — не гарантирует полное выключение подсветки экрана, зависит от вашего устройства.</string>
+    <string name="brightness_dim_sub"> 0% — не гарантирует полное выключение подсветки экрана, зависит от вашего устройства.</string>
     <string name="brightness_dim_value">%1$d%%</string>
     <string name="brightness_dim_default">1%</string>
     <string name="brightness_permission_short">Для затемнения экрана разрешите «Изменение системных настроек».</string>
@@ -81,7 +81,7 @@
     <string name="brightness_accessibility_not_enabled">Служба управления не включена — затемнение не сработает. Включите её в разделе «Управление касанием».</string>
 
     <string name="navi_hud_title">Turn-by-turn навигация на HUD</string>
-    <string name="navi_hud_sub">Передавать манёвры, улицу, расстояние и иконку навигатора на магнитолу. Нужен доступ к уведомлениям.</string>
+    <string name="navi_hud_sub">Передавать манёвры, улицу, расстояние и иконку навигатора на ГУ. Нужен доступ к уведомлениям.</string>
     <string name="navi_info_title">Экспериментальный HUD (NAVI_INFO)</string>
     <string name="navi_info_sub">Дополнительно отправлять NAVI_INFO 0x1003B (CarlifeNaviBikeInfo). Для проверки ГУ, которые не принимают стандартный turn-by-turn; может дублировать или игнорироваться.</string>
     <string name="navi_field6_title">Настройка HUD</string>
@@ -103,7 +103,7 @@
     <string name="accessibility_off">Служба: выключена</string>
     <string name="accessibility_setup">Настроить</string>
     <string name="accessibility_check">Проверить</string>
-    <string name="accessibility_hint">Без службы управления экран будет только смотреть: касания с магнитолы не дойдут.</string>
+    <string name="accessibility_hint">Без службы управления экран можно только смотреть: касания с ГУ не дойдут.</string>
 
     <string name="details_show">Показать детали</string>
     <string name="details_hide">Скрыть детали</string>
@@ -116,7 +116,7 @@
     <string name="footer">Трансляция экрана телефона на экран головного устройства автомобиля по протоколу Baidu CarLife. Для работы приложения, автомобиль должен быть оснащен необходимым программным обеспечением. Приложение не собирает и не передает данные пользователя разработчикам, системные разрешения необходимы только для обработки касаний на экране ГУ, определения и запоминания открытых приложений для их повторного запуска, а также удержания экрана телефона в горизонтальном режиме во время трансляции. В целях безопасности не используйте приложение во время движения. Неофициальное приложение. Приложение не связано с Google или Baidu, CarLife являются товарным знаком его владельца и упоминается в названии приложения только для указания совместимости протокола. Используя данное приложение, вы понимаете и принимаете на себя все риски. </string>
 
     <string name="notification_channel">Трансляция экрана</string>
-    <string name="notification_channel_description">Состояние подключения к CarLife-магнитоле</string>
+    <string name="notification_channel_description">Состояние подключения к ГУ</string>
     <string name="notification_stop">Остановить</string>
     <string name="notification_title">CarLife Mirror</string>
     <string name="notifications_off">Уведомления выключены — кнопки «Остановить» в шторке не будет. Настроить</string>
@@ -129,7 +129,7 @@
     <string name="split_hint_need_stream">Доступно после начала трансляции</string>
     <string name="split_hint_auto">Авторазделение включено в настройках</string>
     <string name="split_hint_choose_apps">Выберите приложения в настройках</string>
-    <string name="primary_start_desc">Начать трансляцию экрана на магнитолу</string>
+    <string name="primary_start_desc">Начать трансляцию экрана на ГУ</string>
     <string name="primary_stop_desc">Остановить трансляцию</string>
 
     <string name="permission_dialog_title">Доступ к системе</string>
@@ -138,11 +138,11 @@
     <string name="permission_rotation_title">Изменение системных настроек</string>
     <string name="permission_rotation_sub">Нужно, чтобы удерживать ландшафт во время трансляции.</string>
     <string name="permission_accessibility_title">Управление касаниями</string>
-    <string name="permission_accessibility_sub">Нужно, чтобы касания с экрана магнитолы работали на телефоне.</string>
+    <string name="permission_accessibility_sub">Нужно, чтобы касания с экрана ГУ работали на телефоне.</string>
     <string name="permission_audio_title">Запись звука</string>
-    <string name="permission_audio_sub">Нужна для передачи звука приложений и голоса навигатора на магнитолу.</string>
+    <string name="permission_audio_sub">Нужна для передачи звука приложений и голоса навигатора на ГУ.</string>
     <string name="permission_notification_title">Доступ к уведомлениям</string>
-    <string name="permission_notification_sub">Нужен для подсказок навигатора на HUD магнитолы.</string>
+    <string name="permission_notification_sub">Нужен для подсказок навигатора на HUD.</string>
     <string name="permission_granted">Разрешено</string>
     <string name="permission_not_granted">Не выдано</string>
     <string name="permission_allow">Разрешить</string>
@@ -157,8 +157,8 @@
     <string name="section_connection">Подключение</string>
     <string name="connection_usb">USB</string>
     <string name="connection_wifi">Wi-Fi</string>
-    <string name="connection_hint_usb">Кабель CarLife. Доступны все функции приложения.</string>
-    <string name="connection_hint_wifi">Включите точку доступа телефона и подключите к ней магнитолу. Если магнитола сама раздаёт Wi-Fi, подключите телефон к её сети. Для Wi-Fi Direct включите Bluetooth и сопрягите телефон с магнитолой. В CarLife на ГУ выберите беспроводное подключение. Если Wi-Fi магнитолы без интернета, Android может направить в него весь трафик: включите «Переключение на мобильные данные» или используйте точку доступа телефона — тогда мобильный интернет сохранится.</string>
+    <string name="connection_hint_usb">Подключение по USB кабелю более надежное и производительное.</string>
+    <string name="connection_hint_wifi">Подключение по Wi-Fi менее надежное и может подтормаживать, а также может блокировать интернет на телефоне. Если ГУ само раздаёт Wi-Fi, подключите телефон к его сети. Для Wi-Fi Direct включите Bluetooth и сопрягите телефон с ГУ. Если ГУ не создает Hotspot, то запустите его на своем телефоне и подключите к нему ГУ. В CarLife на ГУ выберите беспроводное подключение. Если Wi-Fi ГУ без интернета, включите «Переключение на мобильные данные» в настроках Wi-Fi телефона.</string>
     <string name="connection_open_wifi">Настройки Wi-Fi и точки доступа</string>
     <string name="connection_apply_note">Новый способ подключения применится после остановки текущей трансляции.</string>
     <string name="connection_permission_needed">Для Wi-Fi нужны разрешения на устройства поблизости и Bluetooth.</string>
