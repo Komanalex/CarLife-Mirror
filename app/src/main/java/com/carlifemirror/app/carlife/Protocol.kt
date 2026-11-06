@@ -301,12 +301,12 @@ object Wire {
      * Последовательность отдельных write(): сначала 8-байтный заголовок, затем тело кусками <= 16384
      * (так делает HU Baidu и на это рассчитан f_accessory, спека §1.4).
      */
-    fun writeSequence(chan: Int, inner: ByteArray): List<ByteArray> {
+    fun writeSequence(chan: Int, inner: ByteArray, chunk: Int = CHUNK): List<ByteArray> {
         val out = ArrayList<ByteArray>()
         out.add(outerHeader(chan, inner.size))
         var p = 0
         while (p < inner.size) {
-            val n = minOf(CHUNK, inner.size - p)
+            val n = minOf(chunk, inner.size - p)
             out.add(inner.copyOfRange(p, p + n))
             p += n
         }
@@ -369,8 +369,54 @@ class FrameParser {
         }
     }
 
+    /**
+     * Попытка восстановить границу внешнего кадра после ProtocolDesync.
+     * Ищет следующий правдоподобный заголовок [chan][len] с известным каналом
+     * и валидным inner-типом. Возвращает число пропущенных байт; 0 — искать
+     * больше нечего (нужно закрывать транспорт).
+     */
+    fun resync(): Int {
+        val original = start
+        if (end - start >= 8) {
+            var i = start + 1
+            while (i <= end - 8) {
+                val chan = Wire.u32(buf, i)
+                val len = Wire.u32(buf, i + 4)
+                if (chan in 1..6 && len in 0..MAX_RESYNC_LEN) {
+                    val innerStart = i + 8
+                    val available = end - innerStart
+                    val hdrLen = if (chan == Ch.CMD || chan == Ch.TOUCH) 8 else 12
+                    val plausible = if (available < hdrLen) {
+                        true
+                    } else {
+                        val type = Wire.u32(buf, innerStart + hdrLen - 4)
+                        (type ushr 16) == chan || type == Msg.VIDEO_HEARTBEAT
+                    }
+                    if (plausible) {
+                        start = i
+                        return i - original
+                    }
+                }
+                i++
+            }
+        }
+        // Не нашли заголовок: сохраняем хвост, который может оказаться
+        // началом заголовка на следующем чтении.
+        val have = end - start
+        val keep = minOf(7, have)
+        val skipped = have - keep
+        if (keep > 0) System.arraycopy(buf, end - keep, buf, 0, keep)
+        start = 0
+        end = keep
+        return skipped
+    }
+
     /** Байт в буфере, ещё не составивших целое сообщение. */
     fun pending() = end - start
+
+    private companion object {
+        const val MAX_RESYNC_LEN = 16 * 1024 * 1024
+    }
 
     private fun ensure(n: Int) {
         if (end + n <= buf.size) return

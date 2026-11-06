@@ -32,9 +32,14 @@ interface CarTransport {
     /** Неблокирующая отправка для аудио: при переполнении пакет отбрасывается. */
     fun sendDropIfFull(chan: Int, inner: ByteArray): Boolean = send(chan, inner)
 
+    /** Размер куска тела при записи во внешний поток (USB). */
+    fun setWriteChunkSize(bytes: Int) {}
+
     fun close()
 
     val rxBytes: Long
+    /** Байты, реально записанные в транспорт (для телеметрии USB/Wi-Fi). */
+    val txBytes: Long
     fun queueSize(chan: Int): Int
     val queuedVideoBytes: Long
     val queuedVideoFrames: Int

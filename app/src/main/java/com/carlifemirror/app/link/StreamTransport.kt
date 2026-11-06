@@ -46,8 +46,15 @@ class StreamTransport(
     private var reader: Thread? = null
     private var writer: Thread? = null
     @Volatile private var rx = 0L
+    private val tx = AtomicLong()
+    @Volatile private var writeChunk = Wire.CHUNK
 
     override val rxBytes: Long get() = rx
+    override val txBytes: Long get() = tx.get()
+
+    override fun setWriteChunkSize(bytes: Int) {
+        writeChunk = bytes.coerceIn(1024, Wire.CHUNK)
+    }
     override val queuedVideoBytes: Long get() = videoBytes.get()
     override val queuedVideoFrames: Int get() = videoFrames.get()
     override val drainBytesPerSec: Double get() = drain.bytesPerSec
@@ -110,6 +117,7 @@ class StreamTransport(
 
     private fun readLoop(sink: (Int, ByteArray) -> Unit, onClosed: (String) -> Unit) {
         val buf = ByteArray(Wire.CHUNK)
+        var resyncs = 0
         try {
             while (!closed.get()) {
                 val n = input.read(buf)
@@ -120,9 +128,26 @@ class StreamTransport(
                 rx += n
                 try {
                     parser.feed(buf, 0, n) { chan, inner -> assembler.feed(chan, inner, sink) }
+                    resyncs = 0
                 } catch (e: ProtocolDesync) {
+                    val skipped = try {
+                        parser.resync()
+                    } catch (_: Exception) {
+                        0
+                    }
+                    if (skipped > 0 && resyncs < 10) {
+                        resyncs++
+                        Logx.w(
+                            "Протокол CarLife: рассинхрон, пропущено $skipped Б, " +
+                                "восстанавливаю поток; начало=${Hex.compact(buf, minOf(n, 48))}",
+                        )
+                        continue
+                    }
                     if (!closed.get()) {
-                        Logx.e("Нарушение протокола CarLife: ${e.message}")
+                        Logx.e(
+                            "Нарушение протокола CarLife: ${e.message}; " +
+                                "сырые байты=${Hex.compact(buf, minOf(n, 96))}",
+                        )
                         onClosed("Нарушение протокола CarLife: ${e.message}")
                     }
                     return
@@ -147,7 +172,10 @@ class StreamTransport(
                     videoFrames.decrementAndGet()
                 }
                 val t0 = System.nanoTime()
-                for (part in Wire.writeSequence(o.chan, o.inner)) output.write(part)
+                for (part in Wire.writeSequence(o.chan, o.inner, writeChunk)) {
+                    output.write(part)
+                    tx.addAndGet(part.size.toLong())
+                }
                 output.flush()
                 drain.onWrite(SystemClock.elapsedRealtime(), video, o.inner.size)
                 onWritten(o.chan, o.inner)

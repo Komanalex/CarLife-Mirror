@@ -191,6 +191,27 @@ class ProtocolTest {
     }
 
     @Test
+    fun frameParserResynchronizesAfterFourGarbageBytes() {
+        val inner = Wire.dataInner(Msg.VIDEO_DATA, 7, byteArrayOf(1, 2, 3))
+        val frame = Wire.outerHeader(Ch.VIDEO, inner.size) + inner
+        val garbage = byteArrayOf(0x00, 0x06, 0x80.toByte(), 0x01)
+        val parser = FrameParser()
+        var failed = false
+        try {
+            parser.feed(garbage + frame, 0, garbage.size + frame.size) { _, _ -> }
+        } catch (_: ProtocolDesync) {
+            failed = true
+        }
+        assertTrue(failed)
+        assertEquals(garbage.size, parser.resync())
+        val got = ArrayList<Pair<Int, ByteArray>>()
+        parser.feed(ByteArray(0), 0, 0) { c, b -> got.add(Pair(c, b)) }
+        assertEquals(1, got.size)
+        assertEquals(Ch.VIDEO, got[0].first)
+        assertArrayEquals(inner, got[0].second)
+    }
+
+    @Test
     fun writeSequenceSplitsPayloadIntoProtocolChunks() {
         val payload = ByteArray(Wire.CHUNK * 2 + 17) { (it and 0xFF).toByte() }
         val parts = Wire.writeSequence(Ch.VIDEO, payload)

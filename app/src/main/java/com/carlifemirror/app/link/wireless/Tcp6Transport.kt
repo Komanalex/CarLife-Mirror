@@ -350,12 +350,14 @@ class MultiSocketTransport internal constructor(
     private val dispatchLock = Any()
     private val txLock = Any()
     private val rx = AtomicLong()
+    private val tx = AtomicLong()
     private val startedAt = clock()
     @Volatile private var onClosedCallback: ((String) -> Unit)? = null
     @Volatile private var heartbeats = 0L
     @Volatile private var commandHeartbeats = 0L
 
     override val rxBytes: Long get() = rx.get()
+    override val txBytes: Long get() = tx.get()
     override val queuedVideoBytes: Long get() = videoBytes.get()
     override val queuedVideoFrames: Int get() = videoFrames.get()
     override val drainBytesPerSec: Double get() = drain.bytesPerSec
@@ -482,6 +484,7 @@ class MultiSocketTransport internal constructor(
                     videoFrames.decrementAndGet()
                 }
                 output.write(inner)
+                tx.addAndGet(inner.size.toLong())
                 output.flush()
                 if (video) {
                     drain.onWrite(clock(), true, inner.size)

@@ -3,6 +3,7 @@ package com.carlifemirror.app.carlife
 import android.content.Context
 import android.graphics.PointF
 import android.media.AudioManager
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.SystemClock
 import android.view.KeyEvent
@@ -95,6 +96,9 @@ class CarLifeMirrorSession(
     @Volatile private var huChannel = ""
     @Volatile private var huHeartbeats = 0L
     @Volatile private var lastHeartbeatAt = 0L
+    private var idrBitrateCap = 0
+    private var idrCalmKeyFrames = 0
+    private var idleHeartbeatLogged = false
     @Volatile private var lastVideoQueuedAt = 0L
     @Volatile private var lastTransportWriteAt = 0L
     private var firstPacketLogged = false
@@ -160,8 +164,21 @@ class CarLifeMirrorSession(
             return
         }
         sched.schedule({
-            if (!matchSent && !closed.get()) close("Магнитола не прислала версию протокола CarLife")
+            if (!matchSent && !closed.get()) {
+                Logx.w("Рукопожатие: версия ГУ не пришла за 15 с, повторяю MD_INFO")
+                sendCmd(Msg.MD_INFO, Msgs.deviceInfo(deviceInfo()))
+            }
         }, 15, TimeUnit.SECONDS)
+        sched.schedule({
+            if (!matchSent && !closed.get()) {
+                close("Магнитола не прислала версию протокола CarLife за 30 с")
+            }
+        }, 30, TimeUnit.SECONDS)
+        sched.scheduleWithFixedDelay({
+            if (!matchSent && !closed.get()) {
+                Logx.w("Рукопожатие: ГУ молчит, ждём HU_PROTOCOL_VERSION")
+            }
+        }, 10, 10, TimeUnit.SECONDS)
         sched.schedule({
             if (!closed.get() && !carlifeStarted) {
                 close("Магнитола не начала видео за 30 с. Проверьте кабель и повторите.")
@@ -264,6 +281,10 @@ class CarLifeMirrorSession(
                 if (channel.isNotBlank()) {
                     huChannel = channel
                     Logx.i("ГУ channel=$channel")
+                    if (channel == "20082141" && transport.caps.kind == "usb-aoa") {
+                        transport.setWriteChunkSize(Wire.CHUNK / 2)
+                        Logx.i("USB 20082141: тело пишу кусками ${Wire.CHUNK / 2} Б")
+                    }
                 }
                 Logx.i("STATISTIC_INFO: подтверждаю сессию, запрашиваю FEATURE_CONFIG")
                 for (c in Handshake.onStatisticInfo(sendFeatureConfigRequest = true)) sendCmd(c.type, c.body)
@@ -527,6 +548,9 @@ class CarLifeMirrorSession(
         }
         carlifeStarted = true
         paused = false
+        idrBitrateCap = 0
+        idrCalmKeyFrames = 0
+        idleHeartbeatLogged = false
         csdPending = true
         firstPacketLogged = false
         val now = SystemClock.elapsedRealtime()
@@ -796,6 +820,7 @@ class CarLifeMirrorSession(
         }
 
         payload = AnnexB.fixSps(payload, pendingW, pendingH, pendingFps)
+        if (key) applyIdrCeiling(payload.size)
 
         if (now >= resumeGraceUntil && VideoQueueLimit.overflow(
                 transport.queuedVideoFrames,
@@ -837,6 +862,39 @@ class CarLifeMirrorSession(
             val ok = outTypes.contains(7) && outTypes.contains(8) && outTypes.contains(5)
             val text = "Первый видеопакет: ${payload.size} Б, NAL $outTypes"
             if (ok) Logx.i("$text — SPS+PPS+IDR") else Logx.w("$text — не SPS+PPS+IDR")
+        }
+    }
+
+    /**
+     * VW CNS3 20082141: ограничиваем будущий битрейт, если IDR слишком
+     * большой. Это защищает USB от «большой ключевой кадр -> EIO».
+     */
+    private fun applyIdrCeiling(size: Int) {
+        if (huChannel != "20082141" || transport.caps.kind != "usb-aoa") return
+        if (idrBitrateCap <= 0) idrBitrateCap = videoBitrate.coerceAtLeast(IDR_MIN_BITRATE)
+        if (size > IDR_LIMIT_BYTES) {
+            idrCalmKeyFrames = 0
+            val next = maxOf(IDR_MIN_BITRATE, (idrBitrateCap * 0.7).toInt())
+            if (next < idrBitrateCap) {
+                idrBitrateCap = next
+                encoder?.setNetworkBitrateCap(next)
+                Logx.w(
+                    "Видео: IDR $size Б больше $IDR_LIMIT_BYTES Б, " +
+                        "снижаю потолок USB до ${next / 1000} кбит/с",
+                )
+            }
+        } else if (size < IDR_CALM_BYTES) {
+            if (++idrCalmKeyFrames >= IDR_CALM_COUNT) {
+                idrCalmKeyFrames = 0
+                val next = minOf(videoBitrate, maxOf(idrBitrateCap + 1, (idrBitrateCap * 1.15).toInt()))
+                if (next > idrBitrateCap) {
+                    idrBitrateCap = next
+                    encoder?.setNetworkBitrateCap(next)
+                    Logx.i("Видео: IDR стабилен, поднимаю потолок USB до ${next / 1000} кбит/с")
+                }
+            }
+        } else {
+            idrCalmKeyFrames = 0
         }
     }
 
@@ -1057,6 +1115,10 @@ class CarLifeMirrorSession(
         get() = huChannel == "20082141" || huChannel == "20082120" ||
             huChannel == "20082122" || huChannel == "20082134" || huChannel == "20082114"
 
+    /** VW CNS3 20082141 рвёт USB на простое без кадров; шлём VIDEO_HEARTBEAT. */
+    private val idleHeartbeatHu: Boolean
+        get() = huChannel == "20082141"
+
     private fun heartbeat() {
         if (closed.get() || !carlifeStarted) return
         val now = SystemClock.elapsedRealtime()
@@ -1072,9 +1134,22 @@ class CarLifeMirrorSession(
                 period = PAUSE_KEEPALIVE_MS
             }
         } else {
-            if (idle <= 2000) return
-            type = Msg.VIDEO_DATA
-            period = PAUSE_KEEPALIVE_MS
+            if (idle <= 1_000) return
+            if (idleHeartbeatHu) {
+                type = Msg.VIDEO_HEARTBEAT
+                period = IDLE_HEARTBEAT_MS
+                if (!idleHeartbeatLogged) {
+                    idleHeartbeatLogged = true
+                    Logx.i(
+                        "Видео: 20082141 молчит ${idle} мс, шлю пустой VIDEO_HEARTBEAT " +
+                            "раз в $IDLE_HEARTBEAT_MS мс",
+                    )
+                }
+            } else {
+                if (idle <= 2_000) return
+                type = Msg.VIDEO_DATA
+                period = PAUSE_KEEPALIVE_MS
+            }
         }
         if (lastHeartbeatAt != 0L && now - lastHeartbeatAt < period) return
         if (!send(Ch.VIDEO, Wire.dataInner(type, unixSeconds(), ByteArray(0)))) return
@@ -1377,13 +1452,14 @@ class CarLifeMirrorSession(
                 "кадров=$sentFrames (ключевых=$keyFrames), " +
                 "отправлено=${sentBytes / 1024} КБ, " +
                 "очередь=${transport.queuedVideoFrames}/$queueKb КБ, " +
-                "транспорт=$drainKbps кбит/с, кодек=$codecFps FPS/$codecKbps кбит/с, " +
+                "транспорт=$drainKbps кбит/с, tx=${transport.txBytes / 1024} КБ, " +
+                "кодек=$codecFps FPS/$codecKbps кбит/с, " +
                 "термо=${e?.thermalLevelName ?: "—"}, " +
                 "звук=${audioBytes.get() / 1024} КБ/${audioPackets.get()} пак., " +
                 "звук-очередь=${transport.queueSize(Ch.MEDIA)}, " +
                 "звук-отброшено=${audioDropped.get()}, " +
                 "HU hb=$huHeartbeats, " +
-                "keepalive=$heartbeats, отброшено=$discarded"
+                "keepalive=$heartbeats, отброшено=$discarded${wifiLinkInfo()}"
         )
         lastStatLogAt = now
         lastStatFrames = sentFrames
@@ -1407,7 +1483,7 @@ class CarLifeMirrorSession(
         } else {
             wirelessBitrateCap
         }
-        val next = maxOf(WIRELESS_MIN_BITRATE, (current * 0.8).toInt())
+        val next = maxOf(WIRELESS_MIN_BITRATE, (current * 0.7).toInt())
         if (next >= current) return
         wirelessBitrateCap = next
         encoder?.setNetworkBitrateCap(next)
@@ -1430,7 +1506,7 @@ class CarLifeMirrorSession(
         if (wirelessStableSince == 0L) wirelessStableSince = now
         if (now - wirelessStableSince < WIRELESS_STABLE_MS) return
         if (now - lastWirelessRaiseAt < WIRELESS_RAISE_INTERVAL_MS) return
-        val next = minOf(videoBitrate, (wirelessBitrateCap * 1.1).toInt())
+        val next = minOf(videoBitrate, (wirelessBitrateCap * 1.2).toInt())
         if (next <= wirelessBitrateCap) return
         wirelessBitrateCap = next
         lastWirelessRaiseAt = now
@@ -1459,6 +1535,18 @@ class CarLifeMirrorSession(
     private fun videoLabel(): String =
         "${pendingW}x$pendingH @$pendingFps" +
             if (videoBitrate > 0) " • ${videoBitrate / 1000} кбит/с" else ""
+
+    @Suppress("DEPRECATION")
+    private fun wifiLinkInfo(): String {
+        if (transport.caps.kind != "tcp6") return ""
+        return try {
+            val wm = appContext.getSystemService(WifiManager::class.java) ?: return ""
+            val info = wm.connectionInfo ?: return ""
+            " wifi=${info.frequency}MHz/${info.linkSpeed}Mbps/rssi=${info.rssi}"
+        } catch (_: Exception) {
+            ""
+        }
+    }
 
     private fun buildSummary(reason: String, e: ScreenEncoder?): String {
         val uptime = (SystemClock.elapsedRealtime() - startedAt) / 1000L
@@ -1493,8 +1581,10 @@ class CarLifeMirrorSession(
                     "сессия отбросила $dropped"
             )
             appendLine(
-                "Транспорт: принято ${transport.rxBytes / 1024} КБ, очередь ${transport.queuedVideoFrames} кадров / " +
-                    "${transport.queuedVideoBytes / 1024} КБ, отброшено всего $discarded"
+                "Транспорт: принято ${transport.rxBytes / 1024} КБ, " +
+                    "отправлено ${transport.txBytes / 1024} КБ, " +
+                    "очередь ${transport.queuedVideoFrames} кадров / " +
+                    "${transport.queuedVideoBytes / 1024} КБ, отброшено всего $discarded${wifiLinkInfo()}"
             )
             appendLine(
                 "Звук: CarLife ${if (settings.usbAudio) "вкл" else "выкл"}, " +
@@ -1530,6 +1620,7 @@ class CarLifeMirrorSession(
         private const val MODULE_VR = 4
         private const val PAUSE_KEEPALIVE_MS = 1_000L
         private const val PAUSE_HEARTBEAT_MS = 100L
+        private const val IDLE_HEARTBEAT_MS = 1_000L
         private const val NAVI_KEEPALIVE_MS = 5_000L
         private const val NAVI_RESHOW_MS = 10_000L
         private const val NAVI_SHOW_EVERY_MS = 10_000L
@@ -1540,11 +1631,17 @@ class CarLifeMirrorSession(
         /** Не держим в очереди больше ~1 с аудио, иначе звук отстанет от видео. */
         private const val MAX_AUDIO_QUEUE = 8
 
-        private const val WIRELESS_START_BITRATE = 6_000_000
-        private const val WIRELESS_MIN_BITRATE = 3_000_000
-        private const val WIRELESS_ADJUST_COOLDOWN_MS = 10_000L
-        private const val WIRELESS_STABLE_MS = 15_000L
-        private const val WIRELESS_RAISE_INTERVAL_MS = 15_000L
+        /** VW CNS3 20082141: защита USB от слишком больших ключевых кадров. */
+        private const val IDR_LIMIT_BYTES = 600 * 1024
+        private const val IDR_CALM_BYTES = 300 * 1024
+        private const val IDR_CALM_COUNT = 5
+        private const val IDR_MIN_BITRATE = 2_000_000
+
+        private const val WIRELESS_START_BITRATE = 4_000_000
+        private const val WIRELESS_MIN_BITRATE = 2_000_000
+        private const val WIRELESS_ADJUST_COOLDOWN_MS = 1_000L
+        private const val WIRELESS_STABLE_MS = 10_000L
+        private const val WIRELESS_RAISE_INTERVAL_MS = 5_000L
         private const val AUDIO_RESYNC_INTERVAL_MS = 5 * 60 * 1000L
     }
 }
