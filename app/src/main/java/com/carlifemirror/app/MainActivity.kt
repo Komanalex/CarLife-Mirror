@@ -164,6 +164,7 @@ open class MainActivity : Activity() {
     private var checkingBrightnessPermission = false
     private var autoStartAttempted = false
     private var backCallback: OnBackInvokedCallback? = null
+    private var lastProjectionReady = false
 
     private val startAfterRotation = Runnable {
         val start = pendingServiceStart
@@ -792,6 +793,7 @@ open class MainActivity : Activity() {
         systemLandscapeSwitch.setOnCheckedChangeListener { _, checked ->
             if (bindingRotationUi) return@setOnCheckedChangeListener
             settings.systemLandscape = checked
+            syncActivityOrientation()
             updateRotationUi()
             if (checked) {
                 if (RotationController.canWrite(this)) {
@@ -1002,6 +1004,11 @@ open class MainActivity : Activity() {
         heroIcon.imageTintList = ColorStateList.valueOf(color)
 
         val streaming = snapshot.projectionReady
+        if (streaming != lastProjectionReady) {
+            lastProjectionReady = streaming
+            syncActivityOrientation()
+            syncSystemRotation()
+        }
         val retry = streaming && snapshot.phase == Phase.ERROR
         primaryButton.visibility = View.VISIBLE
         primaryButton.text = when {
@@ -1785,6 +1792,7 @@ open class MainActivity : Activity() {
      * Вызывается при возврате из системных настроек и при открытии Activity.
      */
     private fun syncSystemRotation() {
+        syncActivityOrientation()
         val streaming = MirrorState.value.projectionReady
         if (streaming && settings.systemLandscape) {
             if (RotationController.canWrite(this)) {
@@ -1794,6 +1802,22 @@ open class MainActivity : Activity() {
             RotationController.restore(this)
         }
         updateRotationUi()
+    }
+
+    /**
+     * MainActivity объявлена portrait-only, поэтому сама удерживает дисплей
+     * в портрете даже после записи USER_ROTATION. На время трансляции
+     * разрешаем ей landscape, иначе системный экран не поворачивается.
+     */
+    private fun syncActivityOrientation() {
+        val target = if (MirrorState.value.projectionReady && settings.systemLandscape) {
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        if (requestedOrientation != target) {
+            requestedOrientation = target
+        }
     }
 
     /**
