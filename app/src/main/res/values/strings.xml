@@ -122,6 +122,7 @@
     <string name="notification_channel">Трансляция экрана</string>
     <string name="notification_channel_description">Состояние подключения к ГУ</string>
     <string name="notification_stop">Остановить</string>
+    <string name="notification_ok">ОК</string>
     <string name="notification_title">CarLife Mirror</string>
     <string name="notifications_off">Уведомления выключены — кнопки «Остановить» в шторке не будет. Настроить</string>
 

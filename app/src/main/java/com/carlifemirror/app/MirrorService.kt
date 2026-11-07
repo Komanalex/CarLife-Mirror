@@ -1168,7 +1168,7 @@ class MirrorService : Service() {
         }
         nm.createNotificationChannel(ch)
         val bt = NotificationChannel(
-            BT_AUDIO_CHANNEL,
+            HuBtAudioNotification.CHANNEL,
             getString(R.string.hu_bt_audio_channel),
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
@@ -1195,7 +1195,14 @@ class MirrorService : Service() {
             )
             val title = getString(R.string.hu_bt_audio_title)
             val text = getString(R.string.hu_bt_audio_text)
-            val n = Notification.Builder(this, BT_AUDIO_CHANNEL)
+            val dismiss = PendingIntent.getBroadcast(
+                this,
+                4,
+                Intent(this, HuBtAudioDismissReceiver::class.java)
+                    .setAction(HuBtAudioNotification.ACTION_DISMISS),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val n = Notification.Builder(this, HuBtAudioNotification.CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_mirror)
                 .setContentTitle(title)
                 .setContentText(text)
@@ -1205,8 +1212,15 @@ class MirrorService : Service() {
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_RECOMMENDATION)
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .addAction(
+                    Notification.Action.Builder(
+                        Icon.createWithResource(this, R.drawable.ic_stat_mirror),
+                        getString(R.string.notification_ok),
+                        dismiss,
+                    ).build()
+                )
                 .build()
-            nm.notify(BT_AUDIO_NOTIF_ID, n)
+            nm.notify(HuBtAudioNotification.ID, n)
             Logx.w("Звук ГУ: AUDIO_TRANSMISSION_MODE=1, показано уведомление про Bluetooth")
         } catch (e: Exception) {
             Logx.w("Звук ГУ: не удалось показать уведомление: ${e.message}")
@@ -1215,7 +1229,7 @@ class MirrorService : Service() {
 
     private fun cancelHuBluetoothAudioNotification() {
         try {
-            getSystemService(NotificationManager::class.java)?.cancel(BT_AUDIO_NOTIF_ID)
+            getSystemService(NotificationManager::class.java)?.cancel(HuBtAudioNotification.ID)
         } catch (_: Exception) {}
     }
 
@@ -1294,8 +1308,6 @@ class MirrorService : Service() {
         const val EXTRA_REPLACE_PROJECTION = "replace_projection"
         const val EXTRA_CLOSE_APP = "close_app"
         const val CHANNEL = "mirror"
-        private const val BT_AUDIO_CHANNEL = "mirror_bt_audio"
-        private const val BT_AUDIO_NOTIF_ID = 43
         const val NOTIF_ID = 42
         private const val RECONNECT_DELAY_MS = 20_000L
         private const val MAX_RECONNECT_ATTEMPTS = 3

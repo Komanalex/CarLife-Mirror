@@ -118,6 +118,10 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection|connectedDevice" />
 
+        <receiver
+            android:name=".HuBtAudioDismissReceiver"
+            android:exported="false" />
+
         <service
             android:name=".touch.MirrorAccessibilityService"
             android:exported="true"
