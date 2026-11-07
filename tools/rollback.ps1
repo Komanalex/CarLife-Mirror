@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Tag = "",
     [switch]$Last,
     [switch]$List,
@@ -70,8 +70,8 @@ if (-not $Force) {
     Write-Output "Будет выполнен откат:"
     Write-Output "  с:   $head"
     Write-Output "  на:   $target ($targetCommit)"
-    $answer = Read-Host "Продолжить? [y/N]"
-    if ($answer -notmatch "^[yYдД]$") {
+    $answer = (Read-Host "Продолжить? [y/N]").Trim()
+    if ($answer -notin @("y", "Y", "д", "Д")) {
         Write-Output "Отменено."
         return
     }
