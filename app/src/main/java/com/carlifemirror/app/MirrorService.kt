@@ -685,6 +685,9 @@ class MirrorService : Service() {
                     else Logx.i("Сервис: закрыт старый сеанс, игнорирую: $reason")
                 }
             },
+            onHuBluetoothAudio = {
+                main.post { showHuBluetoothAudioNotification() }
+            },
         )
         session = s
         Logx.i("Транспорт сессии: ${transport.label}")
@@ -774,6 +777,7 @@ class MirrorService : Service() {
                 "(USB accessoryList=${usb.accessoryList?.size ?: -1})",
         )
         autoSaveLog()
+        cancelHuBluetoothAudioNotification()
         session = null
         sessionKind = ""
         if (closing) {
@@ -992,6 +996,7 @@ class MirrorService : Service() {
         try {
             getSystemService(NotificationManager::class.java)?.cancel(NOTIF_ID)
         } catch (_: Exception) {}
+        cancelHuBluetoothAudioNotification()
     }
 
     private fun finishForegroundStop() {
@@ -1162,6 +1167,56 @@ class MirrorService : Service() {
             lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
         nm.createNotificationChannel(ch)
+        val bt = NotificationChannel(
+            BT_AUDIO_CHANNEL,
+            getString(R.string.hu_bt_audio_channel),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = getString(R.string.hu_bt_audio_channel_description)
+            setShowBadge(false)
+        }
+        nm.createNotificationChannel(bt)
+    }
+
+    /** ГУ прислала AUDIO_TRANSMISSION_MODE=1 — подсказываем про Bluetooth. */
+    private fun showHuBluetoothAudioNotification() {
+        if (closing) return
+        try {
+            val nm = getSystemService(NotificationManager::class.java)
+            if (!nm.areNotificationsEnabled()) {
+                Logx.w("Звук ГУ: уведомление не показано, уведомления отключены")
+                return
+            }
+            val open = PendingIntent.getService(
+                this,
+                3,
+                Intent(this, MirrorService::class.java).setAction(ACTION_OPEN_MAIN),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val title = getString(R.string.hu_bt_audio_title)
+            val text = getString(R.string.hu_bt_audio_text)
+            val n = Notification.Builder(this, BT_AUDIO_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_mirror)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .setCategory(Notification.CATEGORY_RECOMMENDATION)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .build()
+            nm.notify(BT_AUDIO_NOTIF_ID, n)
+            Logx.w("Звук ГУ: AUDIO_TRANSMISSION_MODE=1, показано уведомление про Bluetooth")
+        } catch (e: Exception) {
+            Logx.w("Звук ГУ: не удалось показать уведомление: ${e.message}")
+        }
+    }
+
+    private fun cancelHuBluetoothAudioNotification() {
+        try {
+            getSystemService(NotificationManager::class.java)?.cancel(BT_AUDIO_NOTIF_ID)
+        } catch (_: Exception) {}
     }
 
     private fun buildNotification(snap: MirrorSnapshot): Notification {
@@ -1239,6 +1294,8 @@ class MirrorService : Service() {
         const val EXTRA_REPLACE_PROJECTION = "replace_projection"
         const val EXTRA_CLOSE_APP = "close_app"
         const val CHANNEL = "mirror"
+        private const val BT_AUDIO_CHANNEL = "mirror_bt_audio"
+        private const val BT_AUDIO_NOTIF_ID = 43
         const val NOTIF_ID = 42
         private const val RECONNECT_DELAY_MS = 20_000L
         private const val MAX_RECONNECT_ATTEMPTS = 3

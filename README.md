@@ -32,7 +32,9 @@ split-screen и затемнение экрана.
   USB и Wi-Fi режимах. Нужно разрешение «Запись звука». Если выключить
   «Трансляцию звука», приложение звук не захватывает, а телефон маршрутизирует
   его сам. В поток входит и голос навигатора (Google Maps, Яндекс.Навигатор,
-  Waze).
+  Waze). Если ГУ сообщает `AUDIO_TRANSMISSION_MODE=1`, приложение показывает
+  уведомление с просьбой подключиться к ГУ по Bluetooth и выбрать Bluetooth
+  в external inputs.
 - Управление касаниями с экрана магнитолы: один и два пальца, а также
   медиа-клавиши (предыдущий/следующий трек, play/pause), если ГУ их присылает.
 - Автоматическое разделение экрана: два выбранных приложения, настраиваемая
@@ -78,7 +80,7 @@ split-screen и затемнение экрана.
 
 ## Сборка
 
-Текущая версия — **2.6.5** (versionCode 67).
+Текущая версия — **2.6.6** (versionCode 68).
 
 Нужны Android Studio (или Android SDK 36 + JDK 17 или новее) и доступ к интернету
 для зависимостей Gradle.
@@ -96,7 +98,7 @@ APK появится в `app/build/outputs/apk/debug/app-debug.apk`.
 .\gradlew.bat :app:testDebugUnitTest :app:lintDebug
 ```
 
-Для сборки APK с именем `carlifemirror.2.6.5.apk`:
+Для сборки APK с именем `carlifemirror.2.6.6.apk`:
 
 ```powershell
 .\gradlew.bat :app:copyNamedDebugApk
@@ -123,7 +125,7 @@ keystore.properties
 .\gradlew.bat :app:assembleRelease :app:copyNamedReleaseApk
 ```
 
-Готовый файл — `app/build/outputs/named/carlifemirror.2.6.5-release.apk`.
+Готовый файл — `app/build/outputs/named/carlifemirror.2.6.6-release.apk`.
 
 ## Установка и подключение
 
@@ -246,7 +248,9 @@ Wi-Fi дополнительно снижает FPS до 15 — разрешен
   отправляет PCM и не управляет маршрутизацией. Android сам направляет звук в
   Bluetooth-ГУ, наушники или динамик телефона. Отдельной настройки Bluetooth нет.
 - Если магнитола сообщает `AUDIO_TRANSMISSION_MODE=1`, она ожидает звук через
-  Bluetooth; CarLife MEDIA в этом случае не запускается.
+  Bluetooth; CarLife MEDIA в этом случае не запускается, а приложение показывает
+  уведомление с подсказкой подключить телефон к ГУ по Bluetooth и выбрать
+  Bluetooth в external inputs.
 - При выходе ГУ в своё меню видео может ставиться на паузу, но звук CarLife
   продолжает передаваться, пока ГУ не закроет сеанс.
 - После mute/unmute приложение сохраняет поток и при необходимости

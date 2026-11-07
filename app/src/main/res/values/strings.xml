@@ -65,6 +65,10 @@
     <string name="usb_audio_sub">Передавать звук приложений на ГУ по USB или Wi-Fi. Нужно разрешение «Запись звука».</string>
     <string name="usb_audio_permission_missing">Разрешение «Запись звука» не выдано — звук на ГУ передаваться не будет.</string>
     <string name="usb_audio_permission_denied">Без разрешения на запись звука передача звука отключена.</string>
+    <string name="hu_bt_audio_title">ГУ ждет звук по блютус</string>
+    <string name="hu_bt_audio_text">Пожалуйста, подключитесь к ГУ по блютус и выберите в external inputs канал блютус.</string>
+    <string name="hu_bt_audio_channel">Звук ГУ по Bluetooth</string>
+    <string name="hu_bt_audio_channel_description">Подсказка, когда магнитола ожидает звук через Bluetooth.</string>
     <string name="auto_start_title">Автотрансляция</string>
     <string name="auto_start_sub">Запускать трансляцию экрана автоматически при запуске приложения. Системный запрос на разрешения захвата остается.</string>
     <string name="touch_title">Управление касаниями</string>

@@ -44,6 +44,7 @@ class CarLifeMirrorSession(
     private val createEncoder: (w: Int, h: Int, fps: Int, bitrate: Int, listener: ScreenEncoder.Listener) -> ScreenEncoder,
     private val createAudio: ((onPcm: (ByteArray) -> Unit) -> MirrorAudioCapture?)? = null,
     private val onClosed: (reason: String) -> Unit,
+    private val onHuBluetoothAudio: (() -> Unit)? = null,
 ) : ScreenEncoder.Listener {
 
     private val closed = AtomicBoolean(false)
@@ -340,8 +341,10 @@ class CarLifeMirrorSession(
                         "Звук: AUDIO_TRANSMISSION_MODE=${audioMode ?: "не задан"}, " +
                             if (huBluetoothAudio) "магнитола просит Bluetooth" else "USB разрешён"
                     )
-                    if (huBluetoothAudio) stopAudio(sendStop = true)
-                    else if (settings.usbAudio && carlifeStarted) {
+                    if (huBluetoothAudio) {
+                        stopAudio(sendStop = true)
+                        onHuBluetoothAudio?.invoke()
+                    } else if (settings.usbAudio && carlifeStarted) {
                         startAudioIfNeeded()
                     }
                     if (enc == 1) {
