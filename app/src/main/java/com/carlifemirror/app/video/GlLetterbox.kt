@@ -64,6 +64,7 @@ class GlLetterbox(
 
     @Volatile private var running = false
     @Volatile private var paused = false
+    @Volatile private var blackFrame = false
     @Volatile private var targetFps = initialFps.coerceIn(1, 60)
     @Volatile private var viewportX = 0
     @Volatile private var viewportY = 0
@@ -141,6 +142,28 @@ class GlLetterbox(
         val fx = (x - vx).toFloat() / vw
         val fy = (y - vy).toFloat() / vh
         return PointF(fx * screenW, fy * screenH)
+    }
+
+    /**
+     * Заливает вход кодировщика чёрным. Нужно, когда MediaProjection остановлен
+     * блокировкой экрана: сессия остаётся живой, но вместо зависшего кадра
+     * магнитола получает чёрный.
+     */
+    fun showBlack() {
+        if (!::handler.isInitialized) return
+        blackFrame = true
+        handler.post {
+            if (!running) return@post
+            try {
+                GLES20.glClearColor(0f, 0f, 0f, 1f)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                EGL14.eglSwapBuffers(display, eglSurface)
+                hasTexture = false
+                log("GL: MediaProjection потерян, показываю чёрный кадр")
+            } catch (t: Throwable) {
+                log("GL чёрный кадр: ${t.javaClass.simpleName}: ${t.message}")
+            }
+        }
     }
 
     fun stop() {
@@ -249,7 +272,7 @@ class GlLetterbox(
     }
 
     private fun onFrame() {
-        if (!running) return
+        if (!running || blackFrame) return
         try {
             val st = surfaceTexture ?: return
             st.updateTexImage()
@@ -268,6 +291,7 @@ class GlLetterbox(
      * не получает новых кадров (KEY_REPEAT_PREVIOUS_FRAME_AFTER на c2.qti ему не помог).
      */
     private fun maybeDraw(now: Long) {
+        if (blackFrame) return
         if (!hasTexture) return
         val period = 1_000_000_000L / targetFps
         if (lastDrawNs != 0L && now - lastDrawNs < period - 2_000_000L) return

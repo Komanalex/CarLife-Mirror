@@ -65,6 +65,8 @@
     <string name="usb_audio_sub">Передавать звук приложений на ГУ по USB или Wi-Fi. Нужно разрешение «Запись звука».</string>
     <string name="usb_audio_permission_missing">Разрешение «Запись звука» не выдано — звук на ГУ передаваться не будет.</string>
     <string name="usb_audio_permission_denied">Без разрешения на запись звука передача звука отключена.</string>
+    <string name="audio_bt_title">Звук по Bluetooth</string>
+    <string name="audio_bt_sub">Не передавать звук через CarLife, а использовать Bluetooth-аудио ГУ. В магнитоле нужно выбрать источник Bluetooth.</string>
     <string name="auto_start_title">Автотрансляция</string>
     <string name="auto_start_sub">Запускать трансляцию экрана автоматически при запуске приложения. Системный запрос на разрешения захвата остается.</string>
     <string name="touch_title">Управление касаниями</string>

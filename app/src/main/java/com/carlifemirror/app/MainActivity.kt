@@ -110,6 +110,8 @@ open class MainActivity : Activity() {
     private lateinit var brightnessDimWarning: TextView
     private lateinit var usbAudioSwitch: Switch
     private lateinit var usbAudioNote: TextView
+    private lateinit var audioBtRow: View
+    private lateinit var audioBtSwitch: Switch
     private lateinit var systemLandscapeSwitch: Switch
     private lateinit var rotationPermissionStatus: TextView
     private lateinit var rotationPermissionButton: Button
@@ -595,6 +597,8 @@ open class MainActivity : Activity() {
         brightnessDimWarning = findViewById(R.id.brightnessDimWarning)
         usbAudioSwitch = findViewById(R.id.usbAudioSwitch)
         usbAudioNote = findViewById(R.id.usbAudioNote)
+        audioBtRow = findViewById(R.id.audioBtRow)
+        audioBtSwitch = findViewById(R.id.audioBtSwitch)
         systemLandscapeSwitch = findViewById(R.id.systemLandscapeSwitch)
         rotationPermissionStatus = findViewById(R.id.rotationPermissionStatus)
         rotationPermissionButton = findViewById(R.id.rotationPermissionButton)
@@ -780,13 +784,21 @@ open class MainActivity : Activity() {
 
         usbAudioSwitch.setOnCheckedChangeListener { _, checked ->
             if (bindingAudioUi) return@setOnCheckedChangeListener
-            if (checked && !hasAudioPermission()) {
+            if (checked && !settings.audioViaBluetooth && !hasAudioPermission()) {
                 pendingAudioSwitch = true
                 requestAudioPermission()
                 return@setOnCheckedChangeListener
             }
             pendingAudioSwitch = false
             settings.usbAudio = checked
+            updateAudioUi()
+            refreshAudioService()
+        }
+
+        audioBtSwitch.setOnCheckedChangeListener { _, checked ->
+            if (bindingAudioUi) return@setOnCheckedChangeListener
+            settings.audioViaBluetooth = checked
+            Logx.i("Звук: выбран маршрут ${if (checked) "Bluetooth" else "CarLife"}")
             updateAudioUi()
             refreshAudioService()
         }
@@ -1239,8 +1251,15 @@ open class MainActivity : Activity() {
         bindingAudioUi = true
         try {
             usbAudioSwitch.isChecked = settings.usbAudio
+            audioBtSwitch.isChecked = settings.audioViaBluetooth
+            audioBtSwitch.isEnabled = settings.usbAudio
+            audioBtRow.alpha = if (settings.usbAudio) 1f else 0.5f
             usbAudioNote.visibility =
-                if (settings.usbAudio && !hasAudioPermission()) View.VISIBLE else View.GONE
+                if (settings.usbAudio && !settings.audioViaBluetooth && !hasAudioPermission()) {
+                    View.VISIBLE
+                } else {
+                    View.GONE
+                }
         } finally {
             bindingAudioUi = false
         }

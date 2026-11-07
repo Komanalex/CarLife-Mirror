@@ -19,8 +19,8 @@ android {
         applicationId = "com.carlifemirror.app"
         minSdk = 29
         targetSdk = 36
-        versionCode = 64
-        versionName = "2.6.2"
+        versionCode = 65
+        versionName = "2.6.3"
     }
 
     signingConfigs {
@@ -61,7 +61,7 @@ tasks.register<Copy>("copyNamedDebugApk") {
     from(layout.buildDirectory.dir("outputs/apk/debug"))
     include("app-debug.apk")
     into(layout.buildDirectory.dir("outputs/named"))
-    rename { "carlifemirror.2.6.2.apk" }
+    rename { "carlifemirror.2.6.3.apk" }
 }
 
 tasks.register<Copy>("copyNamedReleaseApk") {
@@ -69,7 +69,7 @@ tasks.register<Copy>("copyNamedReleaseApk") {
     from(layout.buildDirectory.dir("outputs/apk/release"))
     include("app-release.apk")
     into(layout.buildDirectory.dir("outputs/named"))
-    rename { "carlifemirror.2.6.2-release.apk" }
+    rename { "carlifemirror.2.6.3-release.apk" }
 }
 
 dependencies {

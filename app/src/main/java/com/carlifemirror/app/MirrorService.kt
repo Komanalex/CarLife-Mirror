@@ -71,35 +71,104 @@ class MirrorService : Service() {
 
     private var usbRecoveryAttempts = 0
     private var usbRecoveryReason = ""
+    private var usbRecoveryPending = false
+    private var usbAwaitingAttach = false
     private var usbDetachCheck: Runnable? = null
+    private var usbAttachWait: Runnable? = null
     private val usbRecovery = object : Runnable {
         override fun run() {
-            if (closing || session != null || projection == null) return
-            if (settings.connectionMode != ConnectMode.USB) return
-            val attached = usb.accessoryList?.isNotEmpty() == true
-            if (!attached) {
-                Logx.w("USB: аксессуар не найден после обрыва, переподключение невозможно")
-                scheduleReconnect(usbRecoveryReason)
-                return
-            }
-            if (usbRecoveryAttempts >= USB_RECOVERY_ATTEMPTS) {
-                Logx.w("USB: $USB_RECOVERY_ATTEMPTS попыток восстановления исчерпано")
-                scheduleReconnect(usbRecoveryReason)
-                return
-            }
-            usbRecoveryAttempts++
-            Logx.i("USB: восстановление $usbRecoveryAttempts/$USB_RECOVERY_ATTEMPTS")
-            tryConnect()
-            main.postDelayed(this, USB_RECOVERY_DELAY_MS)
+            attemptUsbRecovery()
         }
     }
 
     private fun startUsbRecovery(reason: String) {
         if (closing || projection == null || session != null) return
         if (settings.connectionMode != ConnectMode.USB) return
-        if (usbRecoveryAttempts == 0) usbRecoveryReason = reason
+        if (!usbRecoveryPending) {
+            usbRecoveryPending = true
+            usbRecoveryReason = reason
+            usbRecoveryAttempts = 0
+        } else if (usbRecoveryReason.isBlank()) {
+            usbRecoveryReason = reason
+        }
         main.removeCallbacks(usbRecovery)
         main.postDelayed(usbRecovery, USB_RECOVERY_FIRST_DELAY_MS)
+        Logx.i(
+            "USB: сессия закрыта, жду стабилизации $USB_RECOVERY_FIRST_DELAY_MS мс " +
+                "перед восстановлением",
+        )
+    }
+
+    private fun attemptUsbRecovery() {
+        if (closing || projection == null || session != null) return
+        if (!usbRecoveryPending) return
+        if (settings.connectionMode != ConnectMode.USB) {
+            clearUsbRecovery()
+            return
+        }
+        if (usbRecoveryAttempts >= USB_RECOVERY_ATTEMPTS) {
+            Logx.w("USB: $USB_RECOVERY_ATTEMPTS попыток восстановления исчерпано")
+            clearUsbRecovery()
+            scheduleReconnect(usbRecoveryReason)
+            return
+        }
+        if (usb.accessoryList?.isNotEmpty() != true) {
+            waitForUsbAttach()
+            return
+        }
+        usbAwaitingAttach = false
+        usbRecoveryAttempts++
+        Logx.i("USB: восстановление $usbRecoveryAttempts/$USB_RECOVERY_ATTEMPTS")
+        tryConnect()
+        main.removeCallbacks(usbRecovery)
+        main.postDelayed(usbRecovery, USB_RECOVERY_DELAY_MS)
+    }
+
+    private fun waitForUsbAttach() {
+        if (!usbRecoveryPending || usbAwaitingAttach) return
+        usbAwaitingAttach = true
+        Logx.i("USB: аксессуар не в списке, жду подключения ${USB_RECOVERY_ATTACH_WAIT_MS / 1000} с")
+        val check = Runnable {
+            usbAttachWait = null
+            if (!usbRecoveryPending || closing) return@Runnable
+            if (usb.accessoryList?.isNotEmpty() == true) {
+                usbAwaitingAttach = false
+                main.postDelayed(usbRecovery, USB_RECOVERY_ATTACH_SETTLE_MS)
+            } else {
+                Logx.w("USB: аксессуар не вернулся, восстановление невозможно")
+                clearUsbRecovery()
+                scheduleReconnect(usbRecoveryReason)
+            }
+        }
+        usbAttachWait?.let { main.removeCallbacks(it) }
+        usbAttachWait = check
+        main.postDelayed(check, USB_RECOVERY_ATTACH_WAIT_MS)
+    }
+
+    private fun clearUsbRecovery() {
+        usbRecoveryPending = false
+        usbAwaitingAttach = false
+        main.removeCallbacks(usbRecovery)
+        usbAttachWait?.let { main.removeCallbacks(it) }
+        usbAttachWait = null
+    }
+
+    /** Физический detach: держим projection и ждём повторного attach. */
+    private fun beginUsbDetachRecovery(reason: String): Boolean {
+        return try {
+            if (closing || projection == null) return false
+            if (settings.connectionMode != ConnectMode.USB) return false
+            if (!usbRecoveryPending) {
+                usbRecoveryPending = true
+                usbRecoveryReason = reason
+                usbRecoveryAttempts = 0
+            }
+            main.removeCallbacks(usbRecovery)
+            waitForUsbAttach()
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private val stateListener: (MirrorSnapshot) -> Unit = { snap ->
@@ -107,7 +176,7 @@ class MirrorService : Service() {
             reconnectAttempts = 0
             usbRecoveryAttempts = 0
             usbRecoveryReason = ""
-            main.removeCallbacks(usbRecovery)
+            clearUsbRecovery()
         }
         if (!closing) {
             updateNotification(snap)
@@ -120,16 +189,25 @@ class MirrorService : Service() {
             when (intent?.action) {
                 UsbManager.ACTION_USB_ACCESSORY_ATTACHED -> {
                     Logx.i("USB-аксессуар подключён")
-                    reconnectAttempts = 0
-                    usbRecoveryAttempts = 0
-                    usbRecoveryReason = ""
+                    main.removeCallbacks(reconnectRunnable)
                     usbDetachCheck?.let { main.removeCallbacks(it) }
                     usbDetachCheck = null
-                    main.removeCallbacks(usbRecovery)
-                    main.removeCallbacks(reconnectRunnable)
                     MirrorState.update { it.copy(usbAttached = true) }
-                    if (settings.connectionMode == ConnectMode.USB && projection != null) {
-                        tryConnect()
+                    if (usbRecoveryPending) {
+                        Logx.i("USB: аксессуар вернулся, продолжаю восстановление")
+                        main.removeCallbacks(usbRecovery)
+                        usbAttachWait?.let { main.removeCallbacks(it) }
+                        usbAttachWait = null
+                        usbAwaitingAttach = false
+                        main.postDelayed(usbRecovery, USB_RECOVERY_ATTACH_SETTLE_MS)
+                    } else {
+                        reconnectAttempts = 0
+                        usbRecoveryAttempts = 0
+                        usbRecoveryReason = ""
+                        main.removeCallbacks(usbRecovery)
+                        if (settings.connectionMode == ConnectMode.USB && projection != null) {
+                            tryConnect()
+                        }
                     }
                 }
                 UsbManager.ACTION_USB_ACCESSORY_DETACHED -> {
@@ -138,6 +216,13 @@ class MirrorService : Service() {
                     main.removeCallbacks(usbRecovery)
                     reconnectAttempts = 0
                     MirrorState.update { it.copy(usbAttached = false) }
+                    if (usbRecoveryPending) {
+                        // Это ожидаемый detach после EIO: HU перечисляет
+                        // аксессуар заново. Не останавливаем projection и ждём attach.
+                        Logx.i("USB: detach во время восстановления, жду повторного attach")
+                        waitForUsbAttach()
+                        return
+                    }
                     // Даём системе 800 мс на повторное перечисление/дребезг,
                     // затем проверяем accessoryList перед полным остановом.
                     val check = Runnable {
@@ -148,7 +233,11 @@ class MirrorService : Service() {
                             return@Runnable
                         }
                         if (sessionKind == "usb-aoa") {
-                            stopEverything("USB отключён", fromProjection = false)
+                            if (beginUsbDetachRecovery("USB отключён")) {
+                                Logx.i("USB: проекцию сохраняю, жду повторного подключения")
+                            } else {
+                                stopEverything("USB отключён", fromProjection = false)
+                            }
                         }
                     }
                     usbDetachCheck?.let { main.removeCallbacks(it) }
@@ -405,6 +494,7 @@ class MirrorService : Service() {
         main.removeCallbacks(usbRecovery)
         usbDetachCheck?.let { main.removeCallbacks(it) }
         usbDetachCheck = null
+        clearUsbRecovery()
         main.removeCallbacks(taskCleanup)
         try { brightness.endSession() } catch (_: Exception) {}
         BrightnessController.detach(brightness)
@@ -438,6 +528,23 @@ class MirrorService : Service() {
                     "keyguard=${keyguard?.isKeyguardLocked}, " +
                     "deviceLocked=${keyguard?.isDeviceLocked}",
             )
+            val locked = power?.isInteractive == false || keyguard?.isKeyguardLocked == true
+            val activeSession = session
+            if (locked && activeSession != null && !closing) {
+                // Блокировка не должна ронять CarLife-сессию и USB/Wi-Fi.
+                // Захват уже потерян, поэтому просим сессию оставить транспорт
+                // живым и отправить чёрный кадр.
+                Logx.w("MediaProjection остановлен блокировкой: сессию оставляю активной")
+                activeSession.onProjectionLost()
+                MirrorState.update {
+                    it.copy(
+                        phase = Phase.PAUSED,
+                        title = "Захват экрана остановлен",
+                        detail = "Телефон заблокирован. Разблокируйте его и перезапустите трансляцию.",
+                    )
+                }
+                return
+            }
             stopEverything("Захват экрана остановлен", fromProjection = true)
         }
     }
@@ -445,9 +552,11 @@ class MirrorService : Service() {
     private fun updateBrightnessForPhase(phase: Phase) {
         val previous = lastBrightnessPhase
         lastBrightnessPhase = phase
-        if (phase == Phase.STREAMING && previous != Phase.STREAMING) {
+        val active = phase == Phase.STREAMING || phase == Phase.PAUSED
+        val previousActive = previous == Phase.STREAMING || previous == Phase.PAUSED
+        if (active && !previousActive) {
             if (settings.dimScreen) brightness.startSession()
-        } else if (phase != Phase.STREAMING && previous == Phase.STREAMING) {
+        } else if (!active && previousActive) {
             brightness.endSession()
         }
     }
@@ -455,7 +564,8 @@ class MirrorService : Service() {
     /** Перечитывает настройку после её изменения или выдачи разрешений. */
     private fun refreshBrightness() {
         val phase = MirrorState.value.phase
-        if (phase == Phase.STREAMING && settings.dimScreen) {
+        val active = phase == Phase.STREAMING || phase == Phase.PAUSED
+        if (active && settings.dimScreen) {
             brightness.startSession()
         } else {
             brightness.endSession()
@@ -698,7 +808,14 @@ class MirrorService : Service() {
                     error = true,
                 )
             }
-            if (shouldRecoverUsb(reason)) {
+            if (usbRecoveryPending) {
+                Logx.i("USB: сессия закрыта во время восстановления, жду attach вместо остановки")
+            } else if (
+                reason.startsWith("USB отключён") &&
+                beginUsbDetachRecovery(reason)
+            ) {
+                Logx.i("USB: физический detach, жду повторного подключения")
+            } else if (shouldRecoverUsb(reason)) {
                 startUsbRecovery(reason)
             } else {
                 scheduleReconnect(reason)
@@ -710,7 +827,9 @@ class MirrorService : Service() {
     private fun shouldRecoverUsb(reason: String): Boolean {
         if (closing || projection == null) return false
         if (settings.connectionMode != ConnectMode.USB) return false
-        if (usb.accessoryList?.isNotEmpty() != true) return false
+        val ioFailure = reason.contains("Ошибка чтения USB", ignoreCase = true) ||
+            reason.contains("Ошибка записи USB", ignoreCase = true)
+        if (!ioFailure && usb.accessoryList?.isNotEmpty() != true) return false
         if (reason.contains("завершила сеанс", ignoreCase = true) ||
             reason.contains("отклонила", ignoreCase = true) ||
             reason.contains("пауза", ignoreCase = true) ||
@@ -802,6 +921,7 @@ class MirrorService : Service() {
         main.removeCallbacks(usbRecovery)
         usbDetachCheck?.let { main.removeCallbacks(it) }
         usbDetachCheck = null
+        clearUsbRecovery()
         main.removeCallbacks(taskCleanup)
         reconnectAttempts = 0
         usbRecoveryAttempts = 0
@@ -1129,9 +1249,11 @@ class MirrorService : Service() {
         const val NOTIF_ID = 42
         private const val RECONNECT_DELAY_MS = 20_000L
         private const val MAX_RECONNECT_ATTEMPTS = 3
-        private const val USB_RECOVERY_ATTEMPTS = 2
-        private const val USB_RECOVERY_FIRST_DELAY_MS = 800L
-        private const val USB_RECOVERY_DELAY_MS = 2_500L
+        private const val USB_RECOVERY_ATTEMPTS = 3
+        private const val USB_RECOVERY_FIRST_DELAY_MS = 2_500L
+        private const val USB_RECOVERY_DELAY_MS = 4_000L
+        private const val USB_RECOVERY_ATTACH_SETTLE_MS = 700L
+        private const val USB_RECOVERY_ATTACH_WAIT_MS = 15_000L
         private const val USB_DETACH_GRACE_MS = 800L
         private const val TASK_CLEANUP_DELAY_MS = 600L
     }

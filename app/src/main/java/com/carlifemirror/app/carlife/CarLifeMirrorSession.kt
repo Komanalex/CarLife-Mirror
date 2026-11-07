@@ -64,6 +64,7 @@ class CarLifeMirrorSession(
     @Volatile private var videoInited = false
     @Volatile private var carlifeStarted = false
     @Volatile private var paused = false
+    @Volatile private var projectionLost = false
     @Volatile private var csd: ByteArray? = null
     @Volatile private var csdPending = true
     @Volatile private var encoder: ScreenEncoder? = null
@@ -96,8 +97,6 @@ class CarLifeMirrorSession(
     @Volatile private var huChannel = ""
     @Volatile private var huHeartbeats = 0L
     @Volatile private var lastHeartbeatAt = 0L
-    private var idrBitrateCap = 0
-    private var idrCalmKeyFrames = 0
     private var idleHeartbeatLogged = false
     @Volatile private var lastVideoQueuedAt = 0L
     @Volatile private var lastTransportWriteAt = 0L
@@ -106,6 +105,9 @@ class CarLifeMirrorSession(
     @Volatile private var lastKeyRequestAt = 0L
     private var lastWatchdogLogAt = 0L
     private var lastOverflowLogAt = 0L
+    @Volatile private var lastWifiOverflowAt = 0L
+    private var wifiOverflowCount = 0
+    private var wifiFpsReduced = false
     @Volatile private var resumeGraceUntil = 0L
     @Volatile private var lastStatLogAt = 0L
     @Volatile private var lastStatFrames = 0L
@@ -339,7 +341,9 @@ class CarLifeMirrorSession(
                             if (huBluetoothAudio) "магнитола просит Bluetooth" else "USB разрешён"
                     )
                     if (huBluetoothAudio) stopAudio(sendStop = true)
-                    else if (settings.usbAudio && carlifeStarted) startAudioIfNeeded()
+                    else if (settings.usbAudio && !settings.audioViaBluetooth && carlifeStarted) {
+                        startAudioIfNeeded()
+                    }
                     if (enc == 1) {
                         Logx.w("ГУ требует CONTENT_ENCRYPTION=1; эта версия не шифрует видео")
                         MirrorState.update {
@@ -528,6 +532,10 @@ class CarLifeMirrorSession(
 
     private fun onVideoStart() {
         if (closed.get()) return
+        if (projectionLost) {
+            Logx.w("Видео: START после потери MediaProjection игнорирую; нужен новый захват")
+            return
+        }
         // START приходит и после PAUSE: это возобновление. Повторный START во время
         // трансляции игнорируем, чтобы не дёргать кодировщик без причины.
         if (carlifeStarted && !paused) return
@@ -548,9 +556,10 @@ class CarLifeMirrorSession(
         }
         carlifeStarted = true
         paused = false
-        idrBitrateCap = 0
-        idrCalmKeyFrames = 0
         idleHeartbeatLogged = false
+        wifiOverflowCount = 0
+        lastWifiOverflowAt = 0L
+        wifiFpsReduced = false
         csdPending = true
         firstPacketLogged = false
         val now = SystemClock.elapsedRealtime()
@@ -627,6 +636,14 @@ class CarLifeMirrorSession(
         if (closed.get() || !carlifeStarted) return
         if (!settings.usbAudio) {
             Logx.i("Звук: выключен в настройках")
+            return
+        }
+        if (settings.audioViaBluetooth) {
+            Logx.i("Звук: выбран Bluetooth, CarLife MEDIA не запускаю")
+            if (!audioInited) {
+                sendAudio(Msg.MEDIA_STOP, null)
+                sendCmd(Msg.MODULE_STATUS, Msgs.moduleStatusSingle(Msg.MODULE_MUSIC, 0))
+            }
             return
         }
         if (huBluetoothAudio) {
@@ -730,7 +747,33 @@ class CarLifeMirrorSession(
     /** Вызывается при переключении настройки «Звук по USB» во время трансляции. */
     fun refreshAudio() {
         if (closed.get() || !carlifeStarted) return
-        if (settings.usbAudio) startAudioIfNeeded() else stopAudio(sendStop = true)
+        if (settings.usbAudio && !settings.audioViaBluetooth) {
+            startAudioIfNeeded()
+        } else {
+            stopAudio(sendStop = true)
+        }
+    }
+
+    /**
+     * MediaProjection остановлен системой (обычно блокировкой экрана).
+     * Не закрываем сессию и транспорт: отправляем в HU чёрный кадр,
+     * чтобы магнитола не висела на последнем кадре. Новый захват потребуется
+     * только после явной остановки/повторного запуска.
+     */
+    fun onProjectionLost() {
+        if (closed.get()) return
+        if (projectionLost) return
+        projectionLost = true
+        Logx.w("Видео: MediaProjection потерян; сессию не закрываю, показываю чёрный кадр")
+        encoder?.showBlack()
+        stopAudio(sendStop = true)
+        MirrorState.update {
+            it.copy(
+                phase = Phase.PAUSED,
+                title = "Захват экрана остановлен",
+                detail = "Телефон заблокирован. Разблокируйте его и перезапустите трансляцию.",
+            )
+        }
     }
 
     private fun onAudioPcm(pcm: ByteArray) {
@@ -820,7 +863,6 @@ class CarLifeMirrorSession(
         }
 
         payload = AnnexB.fixSps(payload, pendingW, pendingH, pendingFps)
-        if (key) applyIdrCeiling(payload.size)
 
         if (now >= resumeGraceUntil && VideoQueueLimit.overflow(
                 transport.queuedVideoFrames,
@@ -830,6 +872,7 @@ class CarLifeMirrorSession(
         ) {
             if (transport.caps.kind == "tcp6") {
                 reduceWirelessBitrate("очередь видео переполнена")
+                maybeLowerWifiFps(now)
             }
             dropped++
             csdPending = true
@@ -862,39 +905,6 @@ class CarLifeMirrorSession(
             val ok = outTypes.contains(7) && outTypes.contains(8) && outTypes.contains(5)
             val text = "Первый видеопакет: ${payload.size} Б, NAL $outTypes"
             if (ok) Logx.i("$text — SPS+PPS+IDR") else Logx.w("$text — не SPS+PPS+IDR")
-        }
-    }
-
-    /**
-     * VW CNS3 20082141: ограничиваем будущий битрейт, если IDR слишком
-     * большой. Это защищает USB от «большой ключевой кадр -> EIO».
-     */
-    private fun applyIdrCeiling(size: Int) {
-        if (huChannel != "20082141" || transport.caps.kind != "usb-aoa") return
-        if (idrBitrateCap <= 0) idrBitrateCap = videoBitrate.coerceAtLeast(IDR_MIN_BITRATE)
-        if (size > IDR_LIMIT_BYTES) {
-            idrCalmKeyFrames = 0
-            val next = maxOf(IDR_MIN_BITRATE, (idrBitrateCap * 0.7).toInt())
-            if (next < idrBitrateCap) {
-                idrBitrateCap = next
-                encoder?.setNetworkBitrateCap(next)
-                Logx.w(
-                    "Видео: IDR $size Б больше $IDR_LIMIT_BYTES Б, " +
-                        "снижаю потолок USB до ${next / 1000} кбит/с",
-                )
-            }
-        } else if (size < IDR_CALM_BYTES) {
-            if (++idrCalmKeyFrames >= IDR_CALM_COUNT) {
-                idrCalmKeyFrames = 0
-                val next = minOf(videoBitrate, maxOf(idrBitrateCap + 1, (idrBitrateCap * 1.15).toInt()))
-                if (next > idrBitrateCap) {
-                    idrBitrateCap = next
-                    encoder?.setNetworkBitrateCap(next)
-                    Logx.i("Видео: IDR стабилен, поднимаю потолок USB до ${next / 1000} кбит/с")
-                }
-            }
-        } else {
-            idrCalmKeyFrames = 0
         }
     }
 
@@ -1493,6 +1503,34 @@ class CarLifeMirrorSession(
         )
     }
 
+    /**
+     * Wi-Fi: если очередь переполняется повторно, снижаем FPS до 15.
+     * Разрешение не меняем — HU часто упирается именно в обработку 30 кадров/с.
+     */
+    private fun maybeLowerWifiFps(now: Long) {
+        if (wifiFpsReduced || transport.caps.kind != "tcp6") return
+        val e = encoder ?: return
+        if (e.currentFps <= WIFI_FALLBACK_FPS) {
+            wifiFpsReduced = true
+            return
+        }
+        if (lastWifiOverflowAt != 0L && now - lastWifiOverflowAt <= WIFI_FPS_OVERFLOW_WINDOW_MS) {
+            wifiOverflowCount++
+        } else {
+            wifiOverflowCount = 1
+        }
+        lastWifiOverflowAt = now
+        if (wifiOverflowCount < WIFI_FPS_OVERFLOW_COUNT) return
+        wifiFpsReduced = true
+        pendingFps = WIFI_FALLBACK_FPS
+        e.setTargetFps(WIFI_FALLBACK_FPS)
+        MirrorState.update { it.copy(video = videoLabel()) }
+        Logx.w(
+            "Wi-Fi: очередь переполняется ($wifiOverflowCount раз), " +
+                "снижаю FPS до $WIFI_FALLBACK_FPS; разрешение ${pendingW}x$pendingH оставляю",
+        )
+    }
+
     /** Wi-Fi: аккуратно возвращаем битрейт, когда канал стабильно разгружен. */
     private fun maybeRaiseWirelessBitrate(now: Long) {
         if (transport.caps.kind != "tcp6" || !carlifeStarted || paused) return
@@ -1587,8 +1625,12 @@ class CarLifeMirrorSession(
                     "${transport.queuedVideoBytes / 1024} КБ, отброшено всего $discarded${wifiLinkInfo()}"
             )
             appendLine(
-                "Звук: CarLife ${if (settings.usbAudio) "вкл" else "выкл"}, " +
-                    "BT-режим ГУ=$huBluetoothAudio, отправлено ${audioBytes.get() / 1024} КБ / " +
+                "Звук: " + when {
+                    !settings.usbAudio -> "выключен"
+                    settings.audioViaBluetooth -> "Bluetooth (настройка)"
+                    huBluetoothAudio -> "Bluetooth (просит ГУ)"
+                    else -> "CarLife MEDIA"
+                } + ", BT-режим ГУ=$huBluetoothAudio, отправлено ${audioBytes.get() / 1024} КБ / " +
                     "${audioPackets.get()} пакетов, отброшено ${audioDropped.get()}"
             )
             if (vrMicPackets > 0) {
@@ -1631,14 +1673,11 @@ class CarLifeMirrorSession(
         /** Не держим в очереди больше ~1 с аудио, иначе звук отстанет от видео. */
         private const val MAX_AUDIO_QUEUE = 8
 
-        /** VW CNS3 20082141: защита USB от слишком больших ключевых кадров. */
-        private const val IDR_LIMIT_BYTES = 600 * 1024
-        private const val IDR_CALM_BYTES = 300 * 1024
-        private const val IDR_CALM_COUNT = 5
-        private const val IDR_MIN_BITRATE = 2_000_000
-
         private const val WIRELESS_START_BITRATE = 4_000_000
         private const val WIRELESS_MIN_BITRATE = 2_000_000
+        private const val WIFI_FALLBACK_FPS = 15
+        private const val WIFI_FPS_OVERFLOW_COUNT = 2
+        private const val WIFI_FPS_OVERFLOW_WINDOW_MS = 30_000L
         private const val WIRELESS_ADJUST_COOLDOWN_MS = 1_000L
         private const val WIRELESS_STABLE_MS = 10_000L
         private const val WIRELESS_RAISE_INTERVAL_MS = 5_000L
