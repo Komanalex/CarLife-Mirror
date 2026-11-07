@@ -73,8 +73,8 @@ class MirrorService : Service() {
     private var usbRecoveryReason = ""
     private var usbRecoveryPending = false
     private var usbAwaitingAttach = false
-    private var usbDetachCheck: Runnable? = null
     private var usbAttachWait: Runnable? = null
+    private var usbDetachStop: Runnable? = null
     private val usbRecovery = object : Runnable {
         override fun run() {
             attemptUsbRecovery()
@@ -151,24 +151,32 @@ class MirrorService : Service() {
         main.removeCallbacks(usbRecovery)
         usbAttachWait?.let { main.removeCallbacks(it) }
         usbAttachWait = null
+        usbDetachStop?.let { main.removeCallbacks(it) }
+        usbDetachStop = null
     }
 
-    /** Физический detach: держим projection и ждём повторного attach. */
-    private fun beginUsbDetachRecovery(reason: String): Boolean {
-        return try {
-            if (closing || projection == null) return false
-            if (settings.connectionMode != ConnectMode.USB) return false
-            if (!usbRecoveryPending) {
-                usbRecoveryPending = true
-                usbRecoveryReason = reason
-                usbRecoveryAttempts = 0
+    /**
+     * Физическое отключение кабеля: не держим projection 15 секунд.
+     * Даём 1,2 с на дребезг/повторное подключение, затем закрываем сессию.
+     */
+    private fun scheduleUsbDetachStop(reason: String) {
+        if (closing) return
+        usbDetachStop?.let { main.removeCallbacks(it) }
+        val stop = Runnable {
+            usbDetachStop = null
+            if (closing) return@Runnable
+            if (usb.accessoryList?.isNotEmpty() == true) {
+                Logx.i("USB: аксессуар вернулся, отменяю остановку")
+                if (settings.connectionMode == ConnectMode.USB && projection != null) {
+                    tryConnect()
+                }
+                return@Runnable
             }
-            main.removeCallbacks(usbRecovery)
-            waitForUsbAttach()
-            true
-        } catch (_: Exception) {
-            false
+            Logx.i("USB: аксессуар исчез, закрываю сессию через $USB_DETACH_GRACE_MS мс")
+            stopEverything(reason, fromProjection = false)
         }
+        usbDetachStop = stop
+        main.postDelayed(stop, USB_DETACH_GRACE_MS)
     }
 
     private val stateListener: (MirrorSnapshot) -> Unit = { snap ->
@@ -190,8 +198,8 @@ class MirrorService : Service() {
                 UsbManager.ACTION_USB_ACCESSORY_ATTACHED -> {
                     Logx.i("USB-аксессуар подключён")
                     main.removeCallbacks(reconnectRunnable)
-                    usbDetachCheck?.let { main.removeCallbacks(it) }
-                    usbDetachCheck = null
+                    usbDetachStop?.let { main.removeCallbacks(it) }
+                    usbDetachStop = null
                     MirrorState.update { it.copy(usbAttached = true) }
                     if (usbRecoveryPending) {
                         Logx.i("USB: аксессуар вернулся, продолжаю восстановление")
@@ -217,32 +225,14 @@ class MirrorService : Service() {
                     reconnectAttempts = 0
                     MirrorState.update { it.copy(usbAttached = false) }
                     if (usbRecoveryPending) {
-                        // Это ожидаемый detach после EIO: HU перечисляет
-                        // аксессуар заново. Не останавливаем projection и ждём attach.
+                        // EIO: HU ещё был в списке, ждём его повторного attach.
                         Logx.i("USB: detach во время восстановления, жду повторного attach")
                         waitForUsbAttach()
                         return
                     }
-                    // Даём системе 800 мс на повторное перечисление/дребезг,
-                    // затем проверяем accessoryList перед полным остановом.
-                    val check = Runnable {
-                        usbDetachCheck = null
-                        if (closing) return@Runnable
-                        if (usb.accessoryList?.isNotEmpty() == true) {
-                            Logx.i("USB: аксессуар уже снова в списке, продолжаю")
-                            return@Runnable
-                        }
-                        if (sessionKind == "usb-aoa") {
-                            if (beginUsbDetachRecovery("USB отключён")) {
-                                Logx.i("USB: проекцию сохраняю, жду повторного подключения")
-                            } else {
-                                stopEverything("USB отключён", fromProjection = false)
-                            }
-                        }
-                    }
-                    usbDetachCheck?.let { main.removeCallbacks(it) }
-                    usbDetachCheck = check
-                    main.postDelayed(check, USB_DETACH_GRACE_MS)
+                    // Обычное физическое отключение: 1,2 с на дребезг, затем
+                    // закрываем сессию и освобождаем projection.
+                    scheduleUsbDetachStop("USB отключён")
                 }
                 permissionAction -> {
                     val acc = intent.usbAccessory()
@@ -492,8 +482,6 @@ class MirrorService : Service() {
         Logx.i("Сервис: onDestroy начало")
         main.removeCallbacks(reconnectRunnable)
         main.removeCallbacks(usbRecovery)
-        usbDetachCheck?.let { main.removeCallbacks(it) }
-        usbDetachCheck = null
         clearUsbRecovery()
         main.removeCallbacks(taskCleanup)
         try { brightness.endSession() } catch (_: Exception) {}
@@ -812,9 +800,18 @@ class MirrorService : Service() {
                 Logx.i("USB: сессия закрыта во время восстановления, жду attach вместо остановки")
             } else if (
                 reason.startsWith("USB отключён") &&
-                beginUsbDetachRecovery(reason)
+                settings.connectionMode == ConnectMode.USB
             ) {
-                Logx.i("USB: физический detach, жду повторного подключения")
+                Logx.i("USB: физический detach, закрываю сессию через $USB_DETACH_GRACE_MS мс")
+                scheduleUsbDetachStop(reason)
+            } else if (
+                settings.connectionMode == ConnectMode.USB &&
+                usb.accessoryList?.isNotEmpty() != true &&
+                (reason.contains("Ошибка чтения USB", ignoreCase = true) ||
+                    reason.contains("Ошибка записи USB", ignoreCase = true))
+            ) {
+                Logx.i("USB: EIO без аксессуара, закрываю сессию через $USB_DETACH_GRACE_MS мс")
+                scheduleUsbDetachStop(reason)
             } else if (shouldRecoverUsb(reason)) {
                 startUsbRecovery(reason)
             } else {
@@ -827,9 +824,7 @@ class MirrorService : Service() {
     private fun shouldRecoverUsb(reason: String): Boolean {
         if (closing || projection == null) return false
         if (settings.connectionMode != ConnectMode.USB) return false
-        val ioFailure = reason.contains("Ошибка чтения USB", ignoreCase = true) ||
-            reason.contains("Ошибка записи USB", ignoreCase = true)
-        if (!ioFailure && usb.accessoryList?.isNotEmpty() != true) return false
+        if (usb.accessoryList?.isNotEmpty() != true) return false
         if (reason.contains("завершила сеанс", ignoreCase = true) ||
             reason.contains("отклонила", ignoreCase = true) ||
             reason.contains("пауза", ignoreCase = true) ||
@@ -919,8 +914,6 @@ class MirrorService : Service() {
         try { brightness.endSession() } catch (_: Exception) {}
         main.removeCallbacks(reconnectRunnable)
         main.removeCallbacks(usbRecovery)
-        usbDetachCheck?.let { main.removeCallbacks(it) }
-        usbDetachCheck = null
         clearUsbRecovery()
         main.removeCallbacks(taskCleanup)
         reconnectAttempts = 0
@@ -1253,8 +1246,8 @@ class MirrorService : Service() {
         private const val USB_RECOVERY_FIRST_DELAY_MS = 2_500L
         private const val USB_RECOVERY_DELAY_MS = 4_000L
         private const val USB_RECOVERY_ATTACH_SETTLE_MS = 700L
-        private const val USB_RECOVERY_ATTACH_WAIT_MS = 15_000L
-        private const val USB_DETACH_GRACE_MS = 800L
+        private const val USB_RECOVERY_ATTACH_WAIT_MS = 6_000L
+        private const val USB_DETACH_GRACE_MS = 1_200L
         private const val TASK_CLEANUP_DELAY_MS = 600L
     }
 }
