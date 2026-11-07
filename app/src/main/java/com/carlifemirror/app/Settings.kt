@@ -115,14 +115,6 @@ class Settings(context: Context) {
         set(value) = sp.edit().putBoolean("usb_audio", value).apply()
 
     /**
-     * Не захватывать звук в CarLife, а отдать его Bluetooth-аудио магнитолы.
-     * В ГУ при этом нужно выбрать источник Bluetooth.
-     */
-    var audioViaBluetooth: Boolean
-        get() = sp.getBoolean("audio_via_bluetooth", false)
-        set(value) = sp.edit().putBoolean("audio_via_bluetooth", value).apply()
-
-    /**
      * HUD отключён: CNS3 не принимает turn-by-turn ни в одном режиме.
      * Оставляем поля для чтения старых настроек, но не отправляем сообщения.
      */

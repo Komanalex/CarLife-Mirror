@@ -728,39 +728,6 @@
                         android:textSize="12sp"
                         android:visibility="gone" />
 
-                    <LinearLayout
-                        android:id="@+id/audioBtRow"
-                        style="@style/Widget.CarLife.Row"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                style="@style/TextAppearance.CarLife.RowTitle"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/audio_bt_title" />
-
-                            <TextView
-                                style="@style/TextAppearance.CarLife.RowSub"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="3dp"
-                                android:text="@string/audio_bt_sub" />
-                        </LinearLayout>
-
-                        <Switch
-                            android:id="@+id/audioBtSwitch"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:contentDescription="@string/audio_bt_title" />
-                    </LinearLayout>
-
                     <View style="@style/Widget.CarLife.Divider" />
 
                     <LinearLayout

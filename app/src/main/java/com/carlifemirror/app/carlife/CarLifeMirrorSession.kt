@@ -341,7 +341,7 @@ class CarLifeMirrorSession(
                             if (huBluetoothAudio) "магнитола просит Bluetooth" else "USB разрешён"
                     )
                     if (huBluetoothAudio) stopAudio(sendStop = true)
-                    else if (settings.usbAudio && !settings.audioViaBluetooth && carlifeStarted) {
+                    else if (settings.usbAudio && carlifeStarted) {
                         startAudioIfNeeded()
                     }
                     if (enc == 1) {
@@ -638,14 +638,6 @@ class CarLifeMirrorSession(
             Logx.i("Звук: выключен в настройках")
             return
         }
-        if (settings.audioViaBluetooth) {
-            Logx.i("Звук: выбран Bluetooth, CarLife MEDIA не запускаю")
-            if (!audioInited) {
-                sendAudio(Msg.MEDIA_STOP, null)
-                sendCmd(Msg.MODULE_STATUS, Msgs.moduleStatusSingle(Msg.MODULE_MUSIC, 0))
-            }
-            return
-        }
         if (huBluetoothAudio) {
             Logx.i("Звук: магнитола запросила передачу через Bluetooth, звук CarLife не запускаю")
             return
@@ -747,7 +739,7 @@ class CarLifeMirrorSession(
     /** Вызывается при переключении настройки «Звук по USB» во время трансляции. */
     fun refreshAudio() {
         if (closed.get() || !carlifeStarted) return
-        if (settings.usbAudio && !settings.audioViaBluetooth) {
+        if (settings.usbAudio) {
             startAudioIfNeeded()
         } else {
             stopAudio(sendStop = true)
@@ -1627,7 +1619,6 @@ class CarLifeMirrorSession(
             appendLine(
                 "Звук: " + when {
                     !settings.usbAudio -> "выключен"
-                    settings.audioViaBluetooth -> "Bluetooth (настройка)"
                     huBluetoothAudio -> "Bluetooth (просит ГУ)"
                     else -> "CarLife MEDIA"
                 } + ", BT-режим ГУ=$huBluetoothAudio, отправлено ${audioBytes.get() / 1024} КБ / " +
