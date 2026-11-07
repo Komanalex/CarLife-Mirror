@@ -23,7 +23,10 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.drawable.Icon
+import android.widget.RemoteViews
 import com.carlifemirror.app.audio.MirrorAudioCapture
 import com.carlifemirror.app.carlife.CarLifeMirrorSession
 import com.carlifemirror.app.link.CarTransport
@@ -1202,23 +1205,29 @@ class MirrorService : Service() {
                     .setAction(HuBtAudioNotification.ACTION_DISMISS),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
+            val night = (resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+            val views = RemoteViews(packageName, R.layout.notification_hu_bt_audio).apply {
+                setTextViewText(R.id.notificationTitle, title)
+                setTextViewText(R.id.notificationText, text)
+                setTextColor(R.id.notificationTitle, if (night) Color.WHITE else Color.BLACK)
+                setTextColor(
+                    R.id.notificationText,
+                    if (night) 0xFFB4C1D2.toInt() else 0xFF5A6A7E.toInt(),
+                )
+                setOnClickPendingIntent(R.id.notificationOk, dismiss)
+            }
             val n = Notification.Builder(this, HuBtAudioNotification.CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_mirror)
                 .setContentTitle(title)
                 .setContentText(text)
-                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setCustomContentView(views)
+                .setCustomBigContentView(views)
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true)
                 .setCategory(Notification.CATEGORY_RECOMMENDATION)
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
-                .addAction(
-                    Notification.Action.Builder(
-                        Icon.createWithResource(this, R.drawable.ic_stat_mirror),
-                        getString(R.string.notification_ok),
-                        dismiss,
-                    ).build()
-                )
                 .build()
             nm.notify(HuBtAudioNotification.ID, n)
             Logx.w("Звук ГУ: AUDIO_TRANSMISSION_MODE=1, показано уведомление про Bluetooth")
