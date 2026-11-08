@@ -901,9 +901,9 @@ open class MainActivity : Activity() {
                     connection = mode,
                     title = if (mode == ConnectMode.WIRELESS) "Готово к Wi-Fi" else "Готово к запуску",
                     detail = if (mode == ConnectMode.WIRELESS) {
-                        "Нажмите «Начать», включите точку доступа телефона и подключите к ней магнитолу."
+                        "Подключитесь к Wi-Fi ГУ и нажмите «Начать трансляцию»."
                     } else {
-                        "Подключите телефон к магнитоле USB-кабелем и разрешите захват экрана."
+                        "Подключите телефон к ГУ по USB-кабелю и разрешите захват экрана."
                     },
                     error = false,
                 )
@@ -965,7 +965,7 @@ open class MainActivity : Activity() {
                 MirrorState.update {
                     it.copy(
                         title = "Готово к Wi-Fi",
-                        detail = "Нажмите «Начать», включите точку доступа телефона и подключите к ней магнитолу.",
+                        detail = "Подключитесь к Wi-Fi ГУ и нажмите «Начать трансляцию».",
                         connection = ConnectMode.WIRELESS,
                         error = false,
                     )
@@ -973,8 +973,8 @@ open class MainActivity : Activity() {
             } else if (attached) {
                 MirrorState.update {
                     it.copy(
-                        title = "Магнитола подключена",
-                        detail = "Нажмите «Начать трансляцию», чтобы разрешить захват экрана.",
+                        title = "ГУ подключено",
+                        detail = "Нажмите «Начать трансляцию» и разрешите захват экрана.",
                         usbAttached = true,
                         connection = ConnectMode.USB,
                         error = false,

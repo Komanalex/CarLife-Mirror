@@ -25,7 +25,7 @@ import android.os.PowerManager
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.graphics.Color
-import android.graphics.drawable.Icon
+import android.view.View
 import android.widget.RemoteViews
 import com.carlifemirror.app.audio.MirrorAudioCapture
 import com.carlifemirror.app.carlife.CarLifeMirrorSession
@@ -1253,23 +1253,36 @@ class MirrorService : Service() {
             Intent(this, MirrorService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val night = (resources.configuration.uiMode and
+            Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val secondary = if (night) 0xFFB4C1D2.toInt() else 0xFF5A6A7E.toInt()
+        val title = getString(R.string.notification_title)
+        val views = RemoteViews(packageName, R.layout.notification_mirror).apply {
+            setTextViewText(R.id.mirrorNotificationTitle, title)
+            setTextViewText(R.id.mirrorNotificationText, snap.title)
+            if (snap.video.isNotBlank()) {
+                setTextViewText(R.id.mirrorNotificationSub, snap.video)
+                setViewVisibility(R.id.mirrorNotificationSub, View.VISIBLE)
+            } else {
+                setViewVisibility(R.id.mirrorNotificationSub, View.GONE)
+            }
+            setTextColor(R.id.mirrorNotificationTitle, if (night) Color.WHITE else Color.BLACK)
+            setTextColor(R.id.mirrorNotificationText, if (night) Color.WHITE else Color.BLACK)
+            setTextColor(R.id.mirrorNotificationSub, secondary)
+            setOnClickPendingIntent(R.id.mirrorNotificationStop, stop)
+        }
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_mirror)
-            .setContentTitle(getString(R.string.notification_title))
+            .setContentTitle(title)
             .setContentText(snap.title)
             .setSubText(if (snap.video.isNotBlank()) snap.video else null)
+            .setCustomContentView(views)
+            .setCustomBigContentView(views)
             .setContentIntent(open)
             .setOngoing(true)
             .setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
-            .addAction(
-                Notification.Action.Builder(
-                    Icon.createWithResource(this, R.drawable.ic_stat_mirror),
-                    getString(R.string.notification_stop),
-                    stop,
-                ).build()
-            )
             .build()
     }
 
