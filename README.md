@@ -15,22 +15,34 @@ split-screen и затемнение экрана телефона.
 ## Пару примеров работы:
 
 <img width="4000" height="2252" alt="20261106_181923" src="https://github.com/user-attachments/assets/8a3a1980-08c5-41b3-b6cd-4bbcea22bb27" />
+
 > Экран приложений телефона
+> 
 
 <img width="4000" height="2252" alt="20261106_182258" src="https://github.com/user-attachments/assets/9abee178-9f01-4893-af48-2738064dc601" />
+
 > Яндекс карты
+> 
 
 <img width="4000" height="2252" alt="20261106_182222" src="https://github.com/user-attachments/assets/56c363ef-aee6-4455-9e31-747b7936e3a4" />
+
 > Яндекс музыка
+> 
 
 <img width="4000" height="2252" alt="20261106_182110" src="https://github.com/user-attachments/assets/4820f9d9-295e-4862-ad76-59422eeb9788" />
+
 > Youtube
+> 
 
 <img width="4000" height="2252" alt="20261106_182521" src="https://github.com/user-attachments/assets/1d9aff4b-f0b6-48de-959a-f42e192bf39a" />
+
 > Telegram
+> 
 
 <img width="4000" height="2252" alt="20261106_182749" src="https://github.com/user-attachments/assets/fa7af338-3fdb-481f-b814-a393f6a16f54" />
+
 > Сплит Карт и Youtube
+> 
 
 ## Возможности
 
