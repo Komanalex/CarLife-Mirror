@@ -3,6 +3,8 @@
 Android-приложение, которое транслирует экран телефона на ГУ через протокол
 CarLife.
 
+<img width="1619" height="600" alt="carlifemirror" src="https://github.com/user-attachments/assets/cf1bf174-ba17-47b1-8b30-41ef4af48d58" />
+
 Поддерживаются **USB** и **Wi-Fi** подклчение.
 
 > Приложение не связано с Baidu, Google или автопроизводителями. Протокол CarLife
