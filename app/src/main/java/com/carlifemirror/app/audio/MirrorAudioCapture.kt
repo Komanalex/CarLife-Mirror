@@ -108,6 +108,7 @@ class MirrorAudioCapture(
         }
         record = r
         running = true
+        AudioOutputMute.muteIfPhoneSpeaker(appContext)
         thread = Thread({ loop(r) }, "carlife-audio").also {
             it.isDaemon = true
             it.start()
@@ -125,6 +126,7 @@ class MirrorAudioCapture(
         try { r?.stop() } catch (_: Exception) {}
         try { r?.release() } catch (_: Exception) {}
         thread = null
+        AudioOutputMute.restore()
         Logx.i("Звук: захват остановлен")
     }
 
@@ -154,6 +156,7 @@ class MirrorAudioCapture(
                 running = false
                 record = null
                 try { r.release() } catch (_: Exception) {}
+                AudioOutputMute.restore()
             }
         }
     }
